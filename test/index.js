@@ -65,6 +65,7 @@ describe('Model', () => {
       interfaces: [Node],
       fields: {
         profile: Profile,
+        hiddenField: false,
       },
     });
 
@@ -76,6 +77,7 @@ describe('Model', () => {
         names: [{id: 'n1', firstName: 'F', lastName: 'L', isPublic: true}],
       },
       friendIds: ['2', '4'],
+      hiddenField: 1,
     });
 
 
@@ -90,6 +92,17 @@ describe('Model', () => {
 
     // access undeclared field
     expect(user.getRawValue('friendIds')).to.eql(['2', '4']);
+
+    // hidden field access
+    expect(user.hiddenField).to.be.undefined;
+
+    // access hidden field
+    expect(user.getRawValue('hiddenField')).to.equal(1);
+
+    // set hidden field
+    user.hiddenField = 3;
+    expect(user.hiddenField).to.be.undefined;
+    expect(user.getRawValue('hiddenField')).to.equal(3);
 
     // constructor
     expect(user.constructor).to.equal(User);

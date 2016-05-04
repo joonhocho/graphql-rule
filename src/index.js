@@ -54,10 +54,12 @@ const createGetter = (key, Type) => {
     };
   }
 
-  // value
-  return function get() {
-    return this._raw[key];
-  };
+  if (Type) {
+    // value
+    return function get() {
+      return this._raw[key];
+    };
+  }
 };
 
 
