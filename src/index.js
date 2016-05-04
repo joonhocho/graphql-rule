@@ -24,7 +24,7 @@ export const models = {};
 
 const createSetter = (key) => function set(value) {
   this._raw[key] = value;
-  this._cached[key] = null;
+  delete this._cached[key];
 };
 
 const createGetter = (key, Type) => {
