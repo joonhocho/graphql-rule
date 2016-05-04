@@ -1,11 +1,3 @@
-export function getOwnPropertyDescriptors(obj) {
-  const descs = {};
-  Object.getOwnPropertyNames(obj).forEach((name) => {
-    descs[name] = Object.getOwnPropertyDescriptor(obj, name);
-  });
-  return descs;
-}
-
 export function inheritPropertyFrom(objA, objB, key, asKey) {
   return Object.defineProperty(
     objA,
