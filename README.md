@@ -61,7 +61,7 @@ const Profile = Model.create(class Profile {}, {
 // Create a User model
 const User = Model.create(class User {
   get friends() {
-    return Promise.resolve(this.getRawValue('friendIds').map((id) => ({id})));
+    return this.getRawValue('friendIds').map((id) => ({id}));
   }
   isFriendsWith(user) {
     return this.getRawValue('friendIds').indexOf(user.id) > -1;
@@ -70,6 +70,7 @@ const User = Model.create(class User {
   interfaces: [Node],
   fields: {
     profile: Profile,
+    hiddenField: false,
   },
 });
 
@@ -81,6 +82,7 @@ const user = new User({
     names: [{id: 'n1', firstName: 'F', lastName: 'L', isPublic: true}],
   },
   friendIds: ['2', '4'],
+  hiddenField: 1,
 });
 
 
@@ -96,6 +98,17 @@ expect(user.friendIds).to.be.undefined;
 // access undeclared field
 expect(user.getRawValue('friendIds')).to.eql(['2', '4']);
 
+// hidden field access
+expect(user.hiddenField).to.be.undefined;
+
+// access hidden field
+expect(user.getRawValue('hiddenField')).to.equal(1);
+
+// set hidden field
+user.hiddenField = 3;
+expect(user.hiddenField).to.be.undefined;
+expect(user.getRawValue('hiddenField')).to.equal(3);
+
 // constructor
 expect(user.constructor).to.equal(User);
 
@@ -105,12 +118,8 @@ expect(user).to.be.an.instanceof(User);
 // implements
 expect(user.implements(Node)).to.be.true;
 
-// dynamic field returns promise
-expect(
-  user.friends.then(
-    (friends) => friends.map(({id}) => id)
-  )
-).to.eventually.eql(user.getRawData().friendIds).notify(done);
+// dynamic field
+expect(user.friends.map(({id}) => id)).to.eql(user.getRawData().friendIds);
 
 // method
 expect(user.isFriendsWith({id: '2'})).to.be.true;
@@ -187,6 +196,22 @@ expect(NameModel.isName(user)).to.be.false;
 expect(NameModel.isInfo(user)).to.be.false;
 expect(NameModel.isInfo(name)).to.be.true;
 expect(NameModel.isInfo).to.equal(InfoBase.isInfo);
+
+// remove parent
+expect(name.getParent()).to.equal(profile);
+name.removeParent();
+expect(name.getParent()).to.be.null;
+
+// clear cache
+expect(profile.names[0]).to.equal(name);
+profile.clearCache('names');
+expect(profile.names[0]).to.not.equal(name);
+expect(profile.names[0].id).to.equal(name.id);
+
+// destory
+user.destroy();
+expect(() => user.id).to.throw();
+expect(user.getParent()).to.be.undefined;
 ```
 
 

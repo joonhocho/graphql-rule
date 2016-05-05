@@ -1,31 +1,19 @@
 import {
+  defineClassName,
+  defineStatic,
+  defineGetterSetter,
   inheritClass,
 } from './util';
 
-const defineStatic = (Class, name, value) => {
-  Object.defineProperty(Class, name, {
-    value,
-    writable: false,
-    enumerable: false,
-    configurable: true,
-  });
-};
-
-const defineGetterSetter = (Class, name, get, set) => {
-  Object.defineProperty(Class, name, {
-    get,
-    set,
-    enumerable: true,
-    configurable: true,
-  });
-};
-
-export const models = {};
 
 const createSetter = (key) => function set(value) {
   this._raw[key] = value;
   delete this._cached[key];
 };
+
+let models = {};
+
+const getModel = (model) => typeof model === 'string' ? models[model] : model;
 
 const createGetter = (key, Type) => {
   if (Array.isArray(Type)) {
@@ -35,20 +23,19 @@ const createGetter = (key, Type) => {
       if (key in this._cached) {
         return this._cached[key];
       }
-      const list = this._raw[key];
-      const instances = list && list.map((item) => new FieldModel(item, this));
+      const instances = this.createChildren(FieldModel, this._raw[key]);
       this._cached[key] = instances;
       return instances;
     };
   }
 
-  if (typeof Type === 'function') {
+  if (typeof Type === 'function' || typeof Type === 'string') {
     // Model
     return function get() {
       if (key in this._cached) {
         return this._cached[key];
       }
-      const instance = new Type(this._raw[key], this);
+      const instance = this.createChild(Type, this._raw[key]);
       this._cached[key] = instance;
       return instance;
     };
@@ -68,14 +55,31 @@ export default class Model {
     base = Model,
     interfaces = [],
     fields = {},
+    parentAccess = true,
   } = {}) {
-    const NewModel = class extends base {
-      constructor(data, parent) {
-        super(data, parent);
-      }
-    };
 
-    defineStatic(NewModel, 'name', Class.name);
+    let NewModel;
+    if (parentAccess) {
+      NewModel = class extends base {
+        constructor(data, parent, context) {
+          super(data, parent, context);
+        }
+      };
+    } else {
+      NewModel = class extends base {
+        constructor(data, parent, context) {
+          super(data, null, context);
+        }
+      };
+    }
+
+    const {name} = Class;
+    defineClassName(NewModel, name);
+    if (models[name]) {
+      throw new Error(`'${name}' model already exists!`);
+    }
+    models[name] = NewModel;
+
     defineStatic(NewModel, 'isModel', true);
     defineStatic(NewModel, 'fields', fields);
     defineStatic(NewModel, 'interfaces', interfaces);
@@ -90,28 +94,32 @@ export default class Model {
     inheritClass(NewModel, base);
     interfaces.forEach((itfc) => inheritClass(NewModel, itfc));
 
-    if (models[NewModel.name]) {
-      throw new Error(`'${NewModel.name}' model already exists!`);
-    }
-    models[NewModel.name] = NewModel;
-
     return NewModel;
   }
 
-  constructor(data, parent = null) {
+  static get = getModel
+  static clear() { models = {}; }
+
+  constructor(data, parent = null, context = null) {
     this._raw = data;
     this._parent = parent;
+    this._context = context;
     this._cached = {};
   }
 
   destroy() {
     delete this._raw;
     delete this._parent;
+    delete this._context;
     delete this._cached;
   }
 
   getRawData() {
     return this._raw;
+  }
+
+  setRawData(data) {
+    return this._raw = data;
   }
 
   getRawValue(name) {
@@ -122,8 +130,8 @@ export default class Model {
     return this._parent;
   }
 
-  removeParent() {
-    this._parent = null;
+  getContext() {
+    return this._context;
   }
 
   getParentOfType(Type) {
@@ -137,6 +145,14 @@ export default class Model {
       }
     }
     return null;
+  }
+
+  createChild(model, data) {
+    return new (getModel(model))(data, this, this._context);
+  }
+
+  createChildren(model, dataList) {
+    return dataList && dataList.map((data) => this.createChild(model, data));
   }
 
   clearCache(key) {

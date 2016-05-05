@@ -4,6 +4,8 @@ chai.use(chaiAsPromised);
 import Model from '../lib';
 
 describe('Model', () => {
+  afterEach(() => Model.clear());
+
   it('User', () => {
     // Create a Node model
     const Node = Model.create(class Node {
@@ -192,11 +194,6 @@ describe('Model', () => {
     expect(NameModel.isInfo(name)).to.be.true;
     expect(NameModel.isInfo).to.equal(InfoBase.isInfo);
 
-    // remove parent
-    expect(name.getParent()).to.equal(profile);
-    name.removeParent();
-    expect(name.getParent()).to.be.null;
-
     // clear cache
     expect(profile.names[0]).to.equal(name);
     profile.clearCache('names');
@@ -207,5 +204,81 @@ describe('Model', () => {
     user.destroy();
     expect(() => user.id).to.throw();
     expect(user.getParent()).to.be.undefined;
+  });
+
+
+  it('creates a Model without parent access', () => {
+    const Child = Model.create(class Child {}, {
+      fields: {
+        id: true,
+      },
+      parentAccess: false,
+    });
+
+    const Parent = Model.create(class Parent {}, {
+      fields: {
+        child: Child,
+      },
+    });
+
+    const parent = new Parent({child: {id: 1}});
+    expect(parent.getParent()).to.be.null;
+    expect(parent.child.getParent()).to.be.null;
+  });
+
+
+  it('can pass down optional context', () => {
+    const GrandChild = Model.create(class GrandChild {}, {
+      fields: {
+        id: true,
+      },
+    });
+
+    const Child = Model.create(class Child {}, {
+      fields: {
+        id: true,
+        child: GrandChild,
+      },
+    });
+
+    const Parent = Model.create(class Parent {}, {
+      fields: {
+        child: Child,
+      },
+    });
+
+    const context = {};
+    const parent = new Parent({child: {child: {}}}, null, context);
+    expect(parent.getContext()).to.equal(context);
+    expect(parent.child.getContext()).to.equal(context);
+    expect(parent.child.child.getContext()).to.equal(context);
+  });
+
+
+  it('can create a child that is an instance of itself', () => {
+    const Selfie = Model.create(class Selfie {}, {
+      fields: {
+        child: 'Selfie',
+      },
+    });
+
+    const parent = new Selfie({child: {}});
+    expect(parent).to.be.an.instanceof(Selfie);
+    expect(parent.child).to.be.an.instanceof(Selfie);
+  });
+
+
+  it('can create a child of future model class', () => {
+    const Present = Model.create(class Present {}, {
+      fields: {
+        child: 'Future',
+      },
+    });
+
+    const Future = Model.create(class Future {});
+
+    const parent = new Present({child: {}});
+    expect(parent).to.be.an.instanceof(Present);
+    expect(parent.child).to.be.an.instanceof(Future);
   });
 });

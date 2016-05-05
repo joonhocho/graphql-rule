@@ -1,3 +1,31 @@
+export function defineClassName(Class, value) {
+  // Old Node versions require the following options to overwrite class name.
+  return Object.defineProperty(Class, 'name', {
+    value,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+}
+
+export function defineStatic(Class, name, value) {
+  return Object.defineProperty(Class, name, {
+    value,
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+export function defineGetterSetter(Class, name, get, set) {
+  return Object.defineProperty(Class, name, {
+    get,
+    set,
+    enumerable: true,
+    configurable: true,
+  });
+};
+
 export function inheritPropertyFrom(objA, objB, key, asKey) {
   return Object.defineProperty(
     objA,
