@@ -27,7 +27,7 @@ describe('Model', () => {
     // Create a InfoBase model
     const InfoBase = Model.create(class InfoBase {
       static isInfo = (obj) => obj instanceof InfoBase
-      get user() { return this.getParentOfType('User'); }
+      get user() { return this.$parentOfType('User'); }
       isSharedWith(user) { return this.user.isFriendsWith(user); }
     });
 
@@ -36,9 +36,9 @@ describe('Model', () => {
       static isName(obj) { return obj instanceof NameModel; }
       getFirstAndLastName() { return [this.firstName, this.lastName]; }
       get shortName() { return `${this.firstName} ${this.lastName}`; }
-      get profile() { return this.getParent(); }
-      get profile2() { return this.getParentOfType(Profile); }
-      get profile3() { return this.getParentOfType('Profile'); }
+      get profile() { return this.$parent; }
+      get profile2() { return this.$parentOfType(Profile); }
+      get profile3() { return this.$parentOfType('Profile'); }
     }, {
       base: InfoBase,
       interfaces: [Node, InfoInterface],
@@ -58,10 +58,10 @@ describe('Model', () => {
     // Create a User model
     const User = Model.create(class User {
       get friends() {
-        return this.getRawValue('friendIds').map((id) => ({id}));
+        return this.$field('friendIds').map((id) => ({id}));
       }
       isFriendsWith(user) {
-        return this.getRawValue('friendIds').indexOf(user.id) > -1;
+        return this.$field('friendIds').indexOf(user.id) > -1;
       }
     }, {
       interfaces: [Node],
@@ -93,18 +93,18 @@ describe('Model', () => {
     expect(user.friendIds).to.be.undefined;
 
     // access undeclared field
-    expect(user.getRawValue('friendIds')).to.eql(['2', '4']);
+    expect(user.$field('friendIds')).to.eql(['2', '4']);
 
     // hidden field access
     expect(user.hiddenField).to.be.undefined;
 
     // access hidden field
-    expect(user.getRawValue('hiddenField')).to.equal(1);
+    expect(user.$field('hiddenField')).to.equal(1);
 
     // set hidden field
     user.hiddenField = 3;
     expect(user.hiddenField).to.be.undefined;
-    expect(user.getRawValue('hiddenField')).to.equal(3);
+    expect(user.$field('hiddenField')).to.equal(3);
 
     // constructor
     expect(user.constructor).to.equal(User);
@@ -112,11 +112,11 @@ describe('Model', () => {
     // instanceof
     expect(user).to.be.an.instanceof(User);
 
-    // implements
-    expect(user.implements(Node)).to.be.true;
+    // $implements
+    expect(user.$implements(Node)).to.be.true;
 
     // dynamic field
-    expect(user.friends.map(({id}) => id)).to.eql(user.getRawData().friendIds);
+    expect(user.friends.map(({id}) => id)).to.eql(user.$data.friendIds);
 
     // method
     expect(user.isFriendsWith({id: '2'})).to.be.true;
@@ -143,8 +143,8 @@ describe('Model', () => {
     expect(name).to.be.an.instanceof(InfoBase);
 
     // interfaces
-    expect(name.implements(Node)).to.be.true;
-    expect(name.implements(InfoInterface)).to.be.true;
+    expect(name.$implements(Node)).to.be.true;
+    expect(name.$implements(InfoInterface)).to.be.true;
 
     // field declared by Node
     expect(name.id).to.equal('n1');
@@ -163,18 +163,18 @@ describe('Model', () => {
 
     expect(name.shortName).to.equal('F L');
 
-    // getParent
+    // $parent
     expect(name.profile).to.equal(profile);
 
-    // getParentOfType
+    // $parentOfType
     expect(name.profile2).to.equal(profile);
     expect(name.profile3).to.equal(profile);
 
-    // getParentOfType declared by InfoBase
+    // $parentOfType declared by InfoBase
     expect(name.user).to.equal(user);
 
-    // getParent
-    expect(name.getParent().getParent()).to.equal(user);
+    // $parent
+    expect(name.$parent.$parent).to.equal(user);
 
     // inherited from base
     expect(name.user).to.equal(user);
@@ -196,34 +196,14 @@ describe('Model', () => {
 
     // clear cache
     expect(profile.names[0]).to.equal(name);
-    profile.clearCache('names');
+    profile.$clearCache('names');
     expect(profile.names[0]).to.not.equal(name);
     expect(profile.names[0].id).to.equal(name.id);
 
     // destory
-    user.destroy();
+    user.$destroy();
     expect(() => user.id).to.throw();
-    expect(user.getParent()).to.be.undefined;
-  });
-
-
-  it('creates a Model without parent access', () => {
-    const Child = Model.create(class Child {}, {
-      fields: {
-        id: true,
-      },
-      parentAccess: false,
-    });
-
-    const Parent = Model.create(class Parent {}, {
-      fields: {
-        child: Child,
-      },
-    });
-
-    const parent = new Parent({child: {id: 1}});
-    expect(parent.getParent()).to.be.null;
-    expect(parent.child.getParent()).to.be.null;
+    expect(user.$parent).to.be.undefined;
   });
 
 
@@ -248,10 +228,37 @@ describe('Model', () => {
     });
 
     const context = {};
-    const parent = new Parent({child: {child: {}}}, null, context);
-    expect(parent.getContext()).to.equal(context);
-    expect(parent.child.getContext()).to.equal(context);
-    expect(parent.child.child.getContext()).to.equal(context);
+    const parent = new Parent({child: {child: {}}}, null, null, context);
+    expect(parent.$context).to.equal(context);
+    expect(parent.child.$context).to.equal(context);
+    expect(parent.child.child.$context).to.equal(context);
+  });
+
+
+  it('passes down a root instance', () => {
+    const GrandChild = Model.create(class GrandChild {}, {
+      fields: {
+        id: true,
+      },
+    });
+
+    const Child = Model.create(class Child {}, {
+      fields: {
+        id: true,
+        child: GrandChild,
+      },
+    });
+
+    const Parent = Model.create(class Parent {}, {
+      fields: {
+        child: Child,
+      },
+    });
+
+    const parent = new Parent({child: {child: {}}});
+    expect(parent.$root).to.equal(parent);
+    expect(parent.child.$root).to.equal(parent);
+    expect(parent.child.child.$root).to.equal(parent);
   });
 
 

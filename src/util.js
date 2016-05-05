@@ -1,3 +1,7 @@
+export function forEach(obj, fn) {
+  Object.keys(obj).forEach((key) => fn(obj[key], key, obj));
+}
+
 export function defineClassName(Class, value) {
   // Old Node versions require the following options to overwrite class name.
   return Object.defineProperty(Class, 'name', {
