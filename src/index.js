@@ -104,6 +104,12 @@ export default class Model {
     this._cached = {};
   }
 
+  destroy() {
+    delete this._raw;
+    delete this._parent;
+    delete this._cached;
+  }
+
   getRawData() {
     return this._raw;
   }
@@ -114,6 +120,10 @@ export default class Model {
 
   getParent() {
     return this._parent;
+  }
+
+  removeParent() {
+    this._parent = null;
   }
 
   getParentOfType(Type) {
@@ -127,6 +137,14 @@ export default class Model {
       }
     }
     return null;
+  }
+
+  clearCache(key) {
+    if (key) {
+      delete this._cached[key];
+    } else {
+      this._cached = {};
+    }
   }
 
   implements(Type) {

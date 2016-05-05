@@ -4,7 +4,7 @@ chai.use(chaiAsPromised);
 import Model from '../lib';
 
 describe('Model', () => {
-  it('User', (done) => {
+  it('User', () => {
     // Create a Node model
     const Node = Model.create(class Node {
       static isNode(obj) { return obj instanceof Node; }
@@ -56,7 +56,7 @@ describe('Model', () => {
     // Create a User model
     const User = Model.create(class User {
       get friends() {
-        return Promise.resolve(this.getRawValue('friendIds').map((id) => ({id})));
+        return this.getRawValue('friendIds').map((id) => ({id}));
       }
       isFriendsWith(user) {
         return this.getRawValue('friendIds').indexOf(user.id) > -1;
@@ -113,12 +113,8 @@ describe('Model', () => {
     // implements
     expect(user.implements(Node)).to.be.true;
 
-    // dynamic field returns promise
-    expect(
-      user.friends.then(
-        (friends) => friends.map(({id}) => id)
-      )
-    ).to.eventually.eql(user.getRawData().friendIds).notify(done);
+    // dynamic field
+    expect(user.friends.map(({id}) => id)).to.eql(user.getRawData().friendIds);
 
     // method
     expect(user.isFriendsWith({id: '2'})).to.be.true;
@@ -195,5 +191,21 @@ describe('Model', () => {
     expect(NameModel.isInfo(user)).to.be.false;
     expect(NameModel.isInfo(name)).to.be.true;
     expect(NameModel.isInfo).to.equal(InfoBase.isInfo);
+
+    // remove parent
+    expect(name.getParent()).to.equal(profile);
+    name.removeParent();
+    expect(name.getParent()).to.be.null;
+
+    // clear cache
+    expect(profile.names[0]).to.equal(name);
+    profile.clearCache('names');
+    expect(profile.names[0]).to.not.equal(name);
+    expect(profile.names[0].id).to.equal(name.id);
+
+    // destory
+    user.destroy();
+    expect(() => user.id).to.throw();
+    expect(user.getParent()).to.be.undefined;
   });
 });
