@@ -41,5 +41,10 @@
     "chai": "^3.5.0",
     "chai-as-promised": "^5.3.0",
     "mocha": "^2.4.5"
+  },
+  "dependencies": {
+    "auth-perm": "0.0.3",
+    "graphql-permissions": "0.0.4",
+    "romodel": "github:joonhocho/romodel"
   }
 }
