@@ -12,29 +12,48 @@ const createSetter = (key) => function set(value) {
   delete this._cache[key];
 };
 
+const getGetter = (obj, key) => {
+  const {get} = Object.getOwnPropertyDescriptor(obj, key);
+  if (!get) {
+    throw new Error(`Getter must be set for property, '${key}'`);
+  }
+  return get;
+}
+
 let models = {};
 
 const getModel = (model) => typeof model === 'string' ? models[model] : model;
 
-const createGetter = (key, Type) => {
+const createGetter = (prototype, key, Type) => {
   if (Array.isArray(Type)) {
     // [Model]
+    if (key in prototype) {
+      const getter = getGetter(prototype, key);
+      const FieldModel = Type[0];
+      return function get() {
+        const {_cache: c} = this;
+        return c[key] || (c[key] = this.$createChildren(FieldModel, getter.call(this)));
+      };
+    }
     const FieldModel = Type[0];
     return function get() {
-      const {_cache} = this;
-      return (key in _cache) ?
-        _cache[key] :
-        (_cache[key] = this.$createChildren(FieldModel, this._data[key]));
+      const {_cache: c} = this;
+      return c[key] || (c[key] = this.$createChildren(FieldModel, this._data[key]));
     };
   }
 
   if (typeof Type === 'function' || typeof Type === 'string') {
     // Model
+    if (key in prototype) {
+      const getter = getGetter(prototype, key);
+      return function get() {
+        const {_cache: c} = this;
+        return c[key] || (c[key] = this.$createChild(Type, getter.call(this)));
+      };
+    }
     return function get() {
-      const {_cache} = this;
-      return (key in _cache) ?
-        _cache[key] :
-        (_cache[key] = this.$createChild(Type, this._data[key]));
+      const {_cache: c} = this;
+      return c[key] || (c[key] = this.$createChild(Type, this._data[key]));
     };
   }
 
@@ -56,24 +75,24 @@ export default class Model {
     const NewModel = class extends Base {};
 
     const {name} = Class;
-    defineClassName(NewModel, name);
     if (models[name]) {
       throw new Error(`'${name}' model already exists!`);
     }
     models[name] = NewModel;
 
+    defineClassName(NewModel, name);
     defineStatic(NewModel, 'isModel', true);
     defineStatic(NewModel, 'fields', fields);
     defineStatic(NewModel, 'interfaces', interfaces);
 
-    forEach(fields, (type, key) => defineGetterSetter(
-      NewModel.prototype, key,
-      createGetter(key, type),
-      createSetter(key)
-    ));
-
     [Class, Base].concat(interfaces).forEach((from) =>
         inheritClass(NewModel, from));
+
+    forEach(fields, (type, key) => defineGetterSetter(
+      NewModel.prototype, key,
+      createGetter(NewModel.prototype, key, type),
+      createSetter(key)
+    ));
 
     return NewModel;
   }

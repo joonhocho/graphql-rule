@@ -2,16 +2,6 @@ export function forEach(obj, fn) {
   Object.keys(obj).forEach((key) => fn(obj[key], key, obj));
 }
 
-export function defineClassName(Class, value) {
-  // Old Node versions require the following options to overwrite class name.
-  return Object.defineProperty(Class, 'name', {
-    value,
-    writable: false,
-    enumerable: false,
-    configurable: false,
-  });
-}
-
 export function defineStatic(Class, name, value) {
   return Object.defineProperty(Class, name, {
     value,
@@ -20,6 +10,30 @@ export function defineStatic(Class, name, value) {
     configurable: true,
   });
 }
+
+let defineClassName;
+if ((() => {
+  const A = class {};
+  try {
+    defineStatic(A, 'name', 'B');
+    return A.name === 'B';
+  } catch (e) {
+    return false;
+  }
+})()) {
+  defineClassName = (Class, value) => defineStatic(Class, 'name', value);
+} else {
+  defineClassName = (Class, value) => {
+    // Old Node versions require the following options to overwrite class name.
+    return Object.defineProperty(Class, 'name', {
+      value,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+  };
+}
+export {defineClassName};
 
 export function defineGetterSetter(Class, name, get, set) {
   return Object.defineProperty(Class, name, {

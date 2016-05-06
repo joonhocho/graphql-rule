@@ -285,7 +285,38 @@ describe('Model', () => {
     const Future = Model.create(class Future {});
 
     const parent = new Present({child: {}});
-    expect(parent).to.be.an.instanceof(Present);
     expect(parent.child).to.be.an.instanceof(Future);
+  });
+
+
+  it('combines getter and Model', () => {
+    const Parent = Model.create(class Parent {
+      get child() {
+        return {id: this.childId};
+      }
+      get children() {
+        return [{id: this.childId}];
+      }
+    }, {
+      fields: {
+        childId: true,
+        child: 'Child',
+        children: ['Child'],
+      },
+    });
+
+    const Child = Model.create(class Child {}, {
+      fields: {
+        id: true,
+      },
+    });
+
+    const parent = new Parent({childId: 3});
+
+    expect(parent.child).to.be.an.instanceof(Child);
+    expect(parent.child.id).to.equal(3);
+
+    expect(parent.children[0]).to.be.an.instanceof(Child);
+    expect(parent.children[0].id).to.equal(3);
   });
 });
