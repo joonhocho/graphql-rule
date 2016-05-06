@@ -24,40 +24,69 @@ let models = {};
 
 const getModel = (model) => typeof model === 'string' ? models[model] : model;
 
-const createGetter = (prototype, key, Type) => {
-  if (Array.isArray(Type)) {
+const createGetter = (prototype, key, FieldType) => {
+  if (Array.isArray(FieldType)) {
     // [Model]
-    if (key in prototype) {
-      const getter = getGetter(prototype, key);
-      const FieldModel = Type[0];
+    const FieldItemType = FieldType[0];
+    if (FieldItemType.isModel || typeof FieldItemType === 'string') {
+      if (key in prototype) {
+        const getter = getGetter(prototype, key);
+        return function get() {
+          const {_cache: c} = this;
+          return c[key] || (c[key] = this.$createChildren(FieldItemType, getter.call(this)));
+        };
+      }
+
       return function get() {
         const {_cache: c} = this;
-        return c[key] || (c[key] = this.$createChildren(FieldModel, getter.call(this)));
+        return c[key] || (c[key] = this.$createChildren(FieldItemType, this._data[key]));
       };
     }
-    const FieldModel = Type[0];
+
+    if (key in prototype) {
+      const getter = getGetter(prototype, key);
+      return function get() {
+        const list = getter.call(this);
+        return list && list.map(FieldItemType);
+      };
+    }
+
     return function get() {
-      const {_cache: c} = this;
-      return c[key] || (c[key] = this.$createChildren(FieldModel, this._data[key]));
+      const list = this._data[key];
+      return list && list.map(FieldItemType);
     };
   }
 
-  if (typeof Type === 'function' || typeof Type === 'string') {
+  if (FieldType.isModel || typeof FieldType === 'string') {
     // Model
     if (key in prototype) {
       const getter = getGetter(prototype, key);
       return function get() {
         const {_cache: c} = this;
-        return c[key] || (c[key] = this.$createChild(Type, getter.call(this)));
+        return c[key] || (c[key] = this.$createChild(FieldType, getter.call(this)));
       };
     }
+
     return function get() {
       const {_cache: c} = this;
-      return c[key] || (c[key] = this.$createChild(Type, this._data[key]));
+      return c[key] || (c[key] = this.$createChild(FieldType, this._data[key]));
     };
   }
 
-  if (Type) {
+  if (typeof FieldType === 'function') {
+    if (key in prototype) {
+      const getter = getGetter(prototype, key);
+      return function get() {
+        return FieldType(getter.call(this));
+      };
+    }
+
+    return function get() {
+      return FieldType(this._data[key]);
+    };
+  }
+
+  if (FieldType) {
     // Value
     return function get() {
       return this._data[key];

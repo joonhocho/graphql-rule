@@ -319,4 +319,32 @@ describe('Model', () => {
     expect(parent.children[0]).to.be.an.instanceof(Child);
     expect(parent.children[0].id).to.equal(3);
   });
+
+
+  it('can transform field value with a mapping function', () => {
+    const Simple = Model.create(class Simple {}, {
+      fields: {
+        bool: Boolean,
+        bools: [Boolean],
+        serialized: JSON.stringify,
+        unserialized: JSON.parse,
+      },
+    });
+
+    expect(new Simple({}).bool).to.be.false;
+    expect(new Simple({bool: 1}).bool).to.be.true;
+    expect(new Simple({bool: null}).bool).to.be.false;
+
+    expect(new Simple({bools: null}).bools).to.be.null;
+    expect(new Simple({bools: []}).bools).to.eql([]);
+    expect(new Simple({bools: [1, true, 0, false, null, '']}).bools).to.eql([true, true, false, false, false, false]);
+
+    expect(new Simple({}).serialized).to.equal(JSON.stringify(undefined));
+    expect(new Simple({serialized: null}).serialized).to.equal(JSON.stringify(null));
+    expect(new Simple({serialized: {'a': 1}}).serialized).to.equal(JSON.stringify({'a': 1}));
+
+    expect(() => new Simple({}).unserialized).to.throw();
+    expect(new Simple({unserialized: null}).unserialized).to.eql(null);
+    expect(new Simple({unserialized: JSON.stringify({'a': 1})}).unserialized).to.eql({'a': 1});
+  });
 });
