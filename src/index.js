@@ -150,7 +150,7 @@ export default class Model {
     return this._data;
   }
 
-  $field(name) {
+  $get(name) {
     return this._data[name];
   }
 
