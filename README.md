@@ -192,7 +192,7 @@ p.children[0].getName() === 'b';
 
 
 #### Advanced
-
+Take a look at [test file](https://github.com/joonhocho/graphql-model/blob/master/test/index.js).
 
 
 ### TODO
