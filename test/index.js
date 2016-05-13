@@ -3,7 +3,7 @@ import chaiAsPromised from 'chai-as-promised';
 chai.use(chaiAsPromised);
 import Model from '../lib';
 
-describe('Model', () => {
+describe('GraphQLModel', () => {
   afterEach(() => Model.clear());
 
 
