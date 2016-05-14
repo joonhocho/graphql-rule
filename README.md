@@ -123,6 +123,11 @@ model.nullField === null;
 model.undefinedField === undefined;
 ```
 
+
+### Advanced Usage
+Take a look at [test file](https://github.com/joonhocho/graphql-model/blob/master/test/index.js).
+
+
 ### LICENSE
 ```
 The MIT License (MIT)
