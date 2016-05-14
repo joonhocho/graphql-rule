@@ -1,6 +1,6 @@
 {
   "name": "graphql-model",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "A data model class for wrapping a data object for easier resolving fields in GraphQL",
   "main": "lib/index.js",
   "directories": {
@@ -43,8 +43,5 @@
     "mocha": "^2.4.5"
   },
   "dependencies": {
-    "auth-perm": "0.0.3",
-    "graphql-permissions": "0.0.4",
-    "romodel": "github:joonhocho/romodel"
   }
 }
