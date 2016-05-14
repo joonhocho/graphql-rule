@@ -1,5 +1,6 @@
 import {
   forEach,
+  setProperty,
   defineClassName,
   defineStatic,
   defineGetterSetter,
@@ -7,157 +8,138 @@ import {
   inheritClass,
 } from './util';
 
+
 const SIGNATURE = {};
 
-const createCleanObject = () => Object.create(null);
+const getCleanObject = () => Object.create(null);
 
 const createSetter = (key) => function set(value) {
   this._data[key] = value;
-  delete this._cache[key];
+  delete this[key];
 };
 
-const getGetter = (obj, key) => {
-  const {get} = Object.getOwnPropertyDescriptor(obj, key);
-  if (!get) {
-    throw new Error(`Getter must be set for property, '${key}'`);
-  }
-  return get;
-}
 
-let models = createCleanObject();
+let models = getCleanObject();
+let globalDefaultRead = true;
+let globalDefaultReadFail = null;
+let globalDefaultCache = true;
 
-const getModel = (model) => typeof model === 'string' ? models[model] : model;
 
-const createChildModel = (parent, Class, data) => new Class(data, parent, parent._root, parent._context);
+const getModel = (model) =>
+  typeof model === 'string' ? models[model] : model;
 
-const bypass = (x) => x;
-const block = () => undefined;
-
-const normalizeFieldMappingFns = (fns) => {
-  return (Array.isArray(fns) ? fns : [fns]).map((fn) => {
-    switch (typeof fn) {
-    case 'boolean':
-      return fn ? bypass : block;
-    case 'string':
-      return models[fn] || fn;
-    case 'function':
-      return fn;
-    default:
-      console.error(fn);
-      throw new Error('Invalid field transform function!');
-    }
-  }).filter((x) => x);
-};
+const createChildModel = (parent, Class, data) =>
+  new Class(data, parent._context, parent, parent._root);
 
 const createModelMapFn = (Class) => function(data) {
   return data && createChildModel(this, Class, data);
 };
 
-const createGetter = (prototype, key, fieldMappingFns) => {
-  if (fieldMappingFns == null) {
-    throw new Error('Invalid field transform function!');
-  }
+const createSimpleGetter = (key) => function() { return this._data[key]; };
 
-  const getter = key in prototype ?
-      getGetter(prototype, key) :
-      function() { return this._data[key] };
-
-  let fns = fieldMappingFns, isList = false;
-  if (fns instanceof FieldType) {
-    isList = fns.type === 'list';
-    fns = fns.ofType;
-  }
-  fns = normalizeFieldMappingFns(fns);
-
-  if (!fns.length) {
-    // No mapping functions.
+const wrapGetterWithModel = (key, getter, {type, list}) => {
+  if (!type) {
     return getter;
   }
 
   let mapFn;
-  if (fns.length === 1) {
-    // One mapping function.
-    let fn = fns[0];
-    if (fn.$signature === SIGNATURE) {
-      mapFn = createModelMapFn(fn);
-    } else if (typeof fn === 'string') {
-      mapFn = function(data) {
-        if (!models[fn]) {
-          throw new Error(`Unknown field model. model='${fn}'`);
-        }
-        mapFn = createModelMapFn(models[fn]);
-        return mapFn.call(this, data);
-      };
-    } else {
-      mapFn = fn;
-    }
-  } else {
-    // Multiple mapping function.
-    fns = fns.map((fn, i) => {
-      if (fn.$signature === SIGNATURE) {
-        return createModelMapFn(fn);
-      }
-      if (typeof fn === 'string') {
-        return function(data) {
-          if (!models[fn]) {
-            throw new Error(`Unknown field model. model='${fn}'`);
-          }
-          fn = fns[i] = createModelMapFn(models[fn]);
-          return fn.call(this, data);
-        };
-      }
-      return fn;
-    });
+  if (typeof type === 'string') {
     mapFn = function(data) {
-      return fns.reduce((x, fn) => fn.call(this, x), data);
+      if (!models[type]) {
+        throw new Error(`Unknown field model. model='${type}'`);
+      }
+      mapFn = createModelMapFn(models[type]);
+      return mapFn.call(this, data);
     };
+  } else {
+    mapFn = createModelMapFn(type);
   }
 
-  if (isList) {
+  if (list) {
     // List type field.
     return function get() {
-      const {_cache: c} = this;
-      if (!(key in c)) {
-        const val = getter.call(this);
-        c[key] = val && val.map(mapFn, this);
-      }
-      return c[key];
-    };
-  } else {
-    // Non-list type field.
-    return function get() {
-      const {_cache: c} = this;
-      if (!(key in c)) {
-        c[key] = mapFn.call(this, getter.call(this));
-      }
-      return c[key];
+      const val = getter.call(this);
+      return val && val.map(mapFn, this);
     };
   }
+
+  // Non-list type field.
+  return function get() {
+    return mapFn.call(this, getter.call(this));
+  };
 };
 
-class FieldType {
-  constructor({type, ofType}) {
-    this.type = type;
-    this.ofType = ofType;
+const wrapGetterWithAccess = (key, getter, {read, readFail}) => {
+  if (read === true) {
+    return getter;
   }
-}
+
+  if (!read) {
+    if (typeof readFail === 'function') {
+      return function get() {
+        return readFail(this, key);
+      };
+    }
+    return function get() { return readFail; };
+  }
+
+  if (typeof readFail === 'function') {
+    return function get() {
+      if (read(this, key)) {
+        return getter.call(this);
+      }
+      return readFail(this, key);
+    };
+  }
+
+  return function get() {
+    if (read(this, key)) {
+      return getter.call(this);
+    }
+    return readFail;
+  };
+};
+
+const wrapGetterWithCache = (key, getter, {cache = globalDefaultCache}) => {
+  if (!cache) {
+    return getter;
+  }
+
+  return function get() {
+    const value = getter.call(this);
+    this[key] = value;
+    setProperty(this, key, value);
+    return value;
+  };
+};
+
+const createGetter = (prototype, key, rule) => {
+  let getter;
+  getter = createSimpleGetter(key);
+  getter = wrapGetterWithModel(key, getter, rule);
+  getter = wrapGetterWithAccess(key, getter, rule);
+  getter = wrapGetterWithCache(key, getter, rule);
+  return getter;
+};
 
 
-const allowRead = () => true;
-const disallowRead = () => false;
-const returnNull = () => null;
+// exports
 
-
-export const list = (x) => new FieldType({type: 'list', ofType: x});
+export const config = (defaults) => {
+  if ('read' in defaults) globalDefaultRead = defaults.read;
+  if ('readFail' in defaults) globalDefaultReadFail = defaults.readFail;
+  if ('cache' in defaults) globalDefaultCache = Boolean(defaults.cache);
+};
 
 
 export const create = ({
   name,
-  props = createCleanObject(),
-  rules = createCleanObject(),
+  base = Model,
+  props = getCleanObject(),
+  rules = getCleanObject(),
   interfaces = [],
 } = {}) => {
-  const NewModel = class extends Model {};
+  const NewModel = class extends base {};
 
   // name
   if (models[name]) {
@@ -171,19 +153,14 @@ export const create = ({
   defineStatic(NewModel, '$signature', SIGNATURE);
 
 
-  // interfaces
-  defineStatic(NewModel, '$interfaces', interfaces);
-
-  interfaces.forEach((from) =>
-      inheritClass(NewModel, from));
-
-
   // props
   class Props {
     constructor(model) {
       this.$model = model;
     }
   }
+
+  defineStatic(NewModel, '$Props', Props);
 
   forEach(props, (fn, key) =>
     defineLazyProperty(Props.prototype, key, function() {
@@ -192,36 +169,51 @@ export const create = ({
 
   defineLazyProperty(NewModel.prototype, '$props', function() {
     return new Props(this);
-  }, {
-    enumerable: false,
+  });
+
+
+  // interfaces
+  defineStatic(NewModel, '$interfaces', interfaces);
+
+  if (base !== Model) {
+    inheritClass(NewModel, base);
+    if (base.$Props) inheritClass(Props, base.$Props);
+  }
+
+  interfaces.forEach((from) => {
+    inheritClass(NewModel, from);
+    if (from.$Props) inheritClass(Props, from.$Props);
   });
 
 
   // rules
   const {
     $default: {
-      read: defaultRead = allowRead,
-      reject: defaultReject = returnNull,
-    },
+      read: defaultRead = globalDefaultRead,
+      readFail: defaultReadFail = globalDefaultReadFail,
+    } = {},
     ...otherRules,
   } = rules;
 
   forEach(otherRules, (rule, key) => {
     if (rule === true) {
       rule = {
-        read: allowRead,
-        reject: defaultReject,
+        read: true,
+        readFail: defaultReadFail,
       };
     } else if (rule === false) {
       rule = {
-        read: disallowRead,
-        reject: defaultReject,
+        read: false,
+        readFail: defaultReadFail,
       };
     } else if (typeof rule === 'function') {
       rule = {
         read: rule,
-        reject: defaultReject,
+        readFail: defaultReadFail,
       };
+    } else {
+      if (rule.read === undefined) rule.read = defaultRead;
+      if (rule.readFail === undefined) rule.readFail = defaultReadFail;
     }
 
     defineGetterSetter(
@@ -229,7 +221,7 @@ export const create = ({
       key,
       createGetter(NewModel.prototype, key, rule),
       createSetter(key)
-    )
+    );
   });
 
   return NewModel;
@@ -239,23 +231,21 @@ export const create = ({
 export const get = getModel;
 
 
-export const clear = () => { models = createCleanObject(); };
+export const clear = () => { models = getCleanObject(); };
 
 
 export class Model {
-  constructor(data, parent, root, context = null) {
+  constructor(data, context, parent, root) {
     this._data = data;
     this._parent = parent || null;
     this._root = root || this;
     this._context = context;
-    this._cache = {};
   }
 
   $destroy() {
     delete this._data;
     delete this._parent;
     delete this._context;
-    delete this._cache;
   }
 
   get $data() {
@@ -293,17 +283,9 @@ export class Model {
     return createChildModel(this, getModel(model), data);
   }
 
-  $createChildren(model, dataList) {
+  $createChildren(model, list) {
     const Class = getModel(model);
-    return dataList && dataList.map((data) => createChildModel(this, Class, data));
-  }
-
-  $clearCache(key) {
-    if (key) {
-      delete this._cache[key];
-    } else {
-      this._cache = {};
-    }
+    return list && list.map((data) => createChildModel(this, Class, data));
   }
 
   $implements(Type) {
@@ -313,7 +295,7 @@ export class Model {
 
 
 export default {
-  list,
+  config,
   create,
   get,
   clear,

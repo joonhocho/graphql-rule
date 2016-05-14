@@ -2,6 +2,15 @@ export function forEach(obj, fn) {
   Object.keys(obj).forEach((key) => fn(obj[key], key, obj));
 }
 
+export function setProperty(obj, key, value) {
+  return Object.defineProperty(obj, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 export function defineStatic(Class, name, value) {
   return Object.defineProperty(Class, name, {
     value,
@@ -23,10 +32,10 @@ export function defineMethod(prototype, name, value) {
 export function defineLazyProperty(obj, name, fn, {
   writable = true,
   enumerable = true,
-  configurable: true,
+  configurable = true,
 } = {}) {
   Object.defineProperty(obj, name, {
-    get: function() {
+    get() {
       // Use 'this' instead of obj so that obj can be a prototype.
       const value = fn.call(this);
       Object.defineProperty(this, name, {
@@ -54,15 +63,13 @@ if ((() => {
 })()) {
   defineClassName = (Class, value) => defineStatic(Class, 'name', value);
 } else {
-  defineClassName = (Class, value) => {
-    // Old Node versions require the following options to overwrite class name.
-    return Object.defineProperty(Class, 'name', {
-      value,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-  };
+  // Old Node versions require the following options to overwrite class name.
+  defineClassName = (Class, value) => Object.defineProperty(Class, 'name', {
+    value,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
 }
 export {defineClassName};
 
@@ -73,7 +80,7 @@ export function defineGetterSetter(Class, name, get, set) {
     enumerable: true,
     configurable: true,
   });
-};
+}
 
 export function inheritPropertyFrom(objA, objB, key, asKey) {
   return Object.defineProperty(
