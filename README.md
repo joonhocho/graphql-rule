@@ -1,5 +1,6 @@
 # graphql-model
 Rule based access control for GraphQL fields.
+Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
 
 ### Install
 ```
