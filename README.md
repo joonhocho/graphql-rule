@@ -1,15 +1,15 @@
-# graphql-model
+# graphql-rule
 Rule based access control for GraphQL fields.
 Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
 
 ### Install
 ```
-npm install --save graphql-model
+npm install --save graphql-rule
 ```
 
 ### Basic Usage
 ```javascript
-import {create} from 'graphql-model';
+import {create} from 'graphql-rule';
 
 const Model = create({
   name: 'Model',
@@ -126,7 +126,7 @@ model.undefinedField === undefined;
 
 
 ### Advanced Usage
-Take a look at [test file](https://github.com/joonhocho/graphql-model/blob/master/test/index.js).
+Take a look at [test file](https://github.com/joonhocho/graphql-rule/blob/master/test/index.js).
 
 
 ### LICENSE
