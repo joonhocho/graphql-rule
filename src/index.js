@@ -1,14 +1,13 @@
-import Permissions from 'auth-perm';
-import GraphQLPermissions from 'graphql-permissions';
-import RoModel from 'romodel';
-
 import {
   forEach,
   defineClassName,
   defineStatic,
   defineGetterSetter,
+  defineLazyProperty,
   inheritClass,
 } from './util';
+
+const SIGNATURE = {};
 
 const createCleanObject = () => Object.create(null);
 
@@ -79,7 +78,7 @@ const createGetter = (prototype, key, fieldMappingFns) => {
   if (fns.length === 1) {
     // One mapping function.
     let fn = fns[0];
-    if (fn.isModel) {
+    if (fn.$signature === SIGNATURE) {
       mapFn = createModelMapFn(fn);
     } else if (typeof fn === 'string') {
       mapFn = function(data) {
@@ -95,7 +94,7 @@ const createGetter = (prototype, key, fieldMappingFns) => {
   } else {
     // Multiple mapping function.
     fns = fns.map((fn, i) => {
-      if (fn.isModel) {
+      if (fn.$signature === SIGNATURE) {
         return createModelMapFn(fn);
       }
       if (typeof fn === 'string') {
@@ -144,51 +143,106 @@ class FieldType {
 }
 
 
-export default class Model {
-  static list = (x) => new FieldType({type: 'list', ofType: x})
+const allowRead = () => true;
+const disallowRead = () => false;
+const returnNull = () => null;
 
-  static create(Class, {
-    base: Base = Model,
-    interfaces = [],
-    fields = createCleanObject(),
-    rules = {},
-  } = {}) {
-    const {
-      props = {},
-      read,
-      fields = {},
-    } = rules;
 
-    const NewModel = class extends Base {};
+export const list = (x) => new FieldType({type: 'list', ofType: x});
 
-    const {name} = Class;
-    if (models[name]) {
-      throw new Error(`'${name}' model already exists!`);
+
+export const create = ({
+  name,
+  props = createCleanObject(),
+  rules = createCleanObject(),
+  interfaces = [],
+} = {}) => {
+  const NewModel = class extends Model {};
+
+  // name
+  if (models[name]) {
+    throw new Error(`'${name}' model already exists!`);
+  }
+  models[name] = NewModel;
+  defineClassName(NewModel, name);
+
+
+  // signature
+  defineStatic(NewModel, '$signature', SIGNATURE);
+
+
+  // interfaces
+  defineStatic(NewModel, '$interfaces', interfaces);
+
+  interfaces.forEach((from) =>
+      inheritClass(NewModel, from));
+
+
+  // props
+  class Props {
+    constructor(model) {
+      this.$model = model;
     }
-    models[name] = NewModel;
-
-    defineClassName(NewModel, name);
-    defineStatic(NewModel, 'isModel', true);
-    defineStatic(NewModel, 'fields', fields);
-    defineStatic(NewModel, 'interfaces', interfaces);
-
-    [Class, Base].concat(interfaces).forEach((from) =>
-        inheritClass(NewModel, from));
-
-    forEach(fields, (type, key) => defineGetterSetter(
-      NewModel.prototype, key,
-      createGetter(NewModel.prototype, key, type),
-      createSetter(key)
-    ));
-
-    return NewModel;
   }
 
-  static get = getModel
+  forEach(props, (fn, key) =>
+    defineLazyProperty(Props.prototype, key, function() {
+      return fn.call(this, this.$model);
+    }));
 
-  static clear() { models = createCleanObject(); }
+  defineLazyProperty(NewModel.prototype, '$props', function() {
+    return new Props(this);
+  }, {
+    enumerable: false,
+  });
 
 
+  // rules
+  const {
+    $default: {
+      read: defaultRead = allowRead,
+      reject: defaultReject = returnNull,
+    },
+    ...otherRules,
+  } = rules;
+
+  forEach(otherRules, (rule, key) => {
+    if (rule === true) {
+      rule = {
+        read: allowRead,
+        reject: defaultReject,
+      };
+    } else if (rule === false) {
+      rule = {
+        read: disallowRead,
+        reject: defaultReject,
+      };
+    } else if (typeof rule === 'function') {
+      rule = {
+        read: rule,
+        reject: defaultReject,
+      };
+    }
+
+    defineGetterSetter(
+      NewModel.prototype,
+      key,
+      createGetter(NewModel.prototype, key, rule),
+      createSetter(key)
+    )
+  });
+
+  return NewModel;
+};
+
+
+export const get = getModel;
+
+
+export const clear = () => { models = createCleanObject(); };
+
+
+export class Model {
   constructor(data, parent, root, context = null) {
     this._data = data;
     this._parent = parent || null;
@@ -253,108 +307,15 @@ export default class Model {
   }
 
   $implements(Type) {
-    return this.constructor.interfaces.indexOf(Type) >= 0;
+    return this.constructor.$interfaces.indexOf(Type) >= 0;
   }
 }
 
 
-const Node = RoModel.create(class Node {
-  get nodeType() {
-    return this.constructor.name;
-  }
-}, {
-  fields: {
-    id: true,
-  },
-});
-
-
-function create(Class, {
-  ...options,
-  rules,
-}) {
-  const {
-    roles = {},
-    read,
-    fields = {},
-  } = rules;
-
-
-  return RoModel.create(Class, options);
-}
-
-
-const User = RoModel.create(class User {
-}, {
-  fields: {
-    id: true,
-  },
-});
-
-
-const Tag = RoModel.create(class Tag {
-}, {
-  fields: {
-    id: true,
-  },
-});
-
-
-const InfoInterface = RoModel.create(class InfoInterface {
-}, {
-  fields: {
-    id: true,
-  },
-  rules: {
-    props: {
-      isAdmin: function(auth) {
-        return auth.isAdmin;
-      },
-      owner: function(auth) {
-        return this.$parentOf('User');
-      },
-      isOwner: function(auth, props) {
-        return props.owner.id === auth.id;
-      },
-      isPublic: function() {
-        return this.$get('isPublic');
-      },
-      isSharedDirectly: function(auth) {
-        return this.$get('sharedTo').includes(auth.id);
-      },
-      isSharedViaCard: function(auth, props) {
-        return Boolean(props.owner.$get('tags').find((tag) =>
-          tag.userIds.includes(auth.id) &&
-          tag.infoIds.includes(this.id)
-        ));
-      },
-    },
-    read: function(auth, props) {
-      return props.isAdmin ||
-          props.isOwner ||
-          props.isPublic ||
-          props.isSharedDirectly ||
-          props.isSharedViaCard;
-    },
-    reject: function(auth) {
-      return null;
-    },
-    fields: {
-      name: {
-        model: 'Model',
-        read: function() {
-        },
-        reject: function() {
-        },
-      },
-      isPublic: {
-        read: function(auth, props, parentRead) {
-          return (props.isAdmin || props.isOwner) && parentRead();
-        },
-        reject: function() {
-          throw new Error('Cannot access isPublic');
-        },
-      },
-    },
-  },
-});
+export default {
+  list,
+  create,
+  get,
+  clear,
+  Model,
+};

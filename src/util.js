@@ -11,6 +11,37 @@ export function defineStatic(Class, name, value) {
   });
 }
 
+export function defineMethod(prototype, name, value) {
+  Object.defineProperty(prototype, name, {
+    value,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+export function defineLazyProperty(obj, name, fn, {
+  writable = true,
+  enumerable = true,
+  configurable: true,
+} = {}) {
+  Object.defineProperty(obj, name, {
+    get: function() {
+      // Use 'this' instead of obj so that obj can be a prototype.
+      const value = fn.call(this);
+      Object.defineProperty(this, name, {
+        value,
+        writable,
+        enumerable,
+        configurable,
+      });
+      return value;
+    },
+    enumerable,
+    configurable: true,
+  });
+}
+
 let defineClassName;
 if ((() => {
   const A = class {};
