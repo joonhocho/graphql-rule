@@ -1,6 +1,11 @@
 # graphql-rule
-Rule based access control for GraphQL fields.
+Rule based access / authorization / permission control for GraphQL type fields.
+
 Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
+
+It actually has no dependencies to GraphQL. You can use it for any rule-base access control!
+
+
 
 ### Install
 ```
