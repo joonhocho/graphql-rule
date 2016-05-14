@@ -244,6 +244,7 @@ describe('GraphQLModel', () => {
         children: {
           type: 'Child',
           list: true,
+          readListItem: ({$data}) => $data.id <= 3,
         },
       },
     });
@@ -269,7 +270,7 @@ describe('GraphQLModel', () => {
 
     const p = new Parent({
       child: {id: 1, child: {id: 4}},
-      children: [{id: 2}, {id: 3}],
+      children: [{id: 2}, {id: 3}, {id: 5}],
     }, context);
 
     expect(p.child).to.be.an.instanceof(Child);

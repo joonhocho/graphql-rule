@@ -37,7 +37,7 @@ const createModelMapFn = (Class) => function(data) {
 
 const createSimpleGetter = (key) => function() { return this._data[key]; };
 
-const wrapGetterWithModel = (key, getter, {type, list}) => {
+const wrapGetterWithModel = (key, getter, {type, list, readListItem}) => {
   if (!type) {
     return getter;
   }
@@ -57,6 +57,14 @@ const wrapGetterWithModel = (key, getter, {type, list}) => {
 
   if (list) {
     // List type field.
+    if (readListItem) {
+      // filter item
+      return function get() {
+        const val = getter.call(this);
+        return val && val.map(mapFn, this).filter(readListItem, this);
+      };
+    }
+
     return function get() {
       const val = getter.call(this);
       return val && val.map(mapFn, this);
