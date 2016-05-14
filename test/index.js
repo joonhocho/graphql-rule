@@ -400,4 +400,116 @@ describe('GraphQLModel', () => {
     expect(u.$props.prop2).to.equal(3);
     expect(u.$props.prop3).to.equal(4);
   });
+
+
+  it('README', () => {
+    const Model = create({
+      name: 'Model',
+      props: {
+        // context.admin
+        isAdmin: (model) => Boolean(model.$context.admin),
+
+        // !context.userId
+        isGuest: (model) => !model.$context.userId,
+
+        // !props.isGuest
+        isAuthenticated: (model) => !model.$props.isGuest,
+
+        // context.userId
+        authId: (model) => model.$context.userId,
+
+        // data.authorId
+        authorId: (model) => model.$data.authorId,
+
+        // props.authorId === props.authId
+        isOwner: (model) => model.$props.authorId === model.$props.authId,
+      },
+      rules: {
+        $default: {
+          // read allowed by default
+          read: (model) => true,
+
+          // throws an error when read not allowed
+          readFail: (model, key) => { throw new Error(`Cannot access '${key}'`); },
+        },
+
+        // use $default settings
+        authorId: {},
+
+        // above is equivalent to:
+        adminField: {
+          read: (model) => model.$props.isAdmin,
+        },
+
+        // read allowed only if `props.isAuthenticated`
+        authField: (model) => model.$props.isAuthenticated,
+
+        // read allowed only if `props.isGuest`
+        guestField: (model) => model.$props.isGuest,
+
+        // read allowed only if `props.isOwner`
+        ownerField: (model) => model.$props.isOwner,
+
+        notAllowedField: {
+          read: (model) => false,
+          readFail: (model, key) => { throw new Error('not allowed'); },
+        },
+
+        nullField: {
+          read: (model) => false,
+          readFail: (model) => null,
+        },
+      },
+    });
+
+    const session = {
+      userId: 'user_id_1',
+      admin: true,
+    };
+
+    const model = new Model(
+      {
+        authorId: 'user_id_1',
+        adminField: 'adminFieldValue',
+        authField: 'authFieldValue',
+        guestField: 'guestFieldValue',
+        ownerField: 'ownerFieldValue',
+        notAllowedField: 'notAllowedFieldValue',
+        nullField: 'nullFieldValue',
+        undefinedField: 'undefinedFieldValue',
+      }, // passed as $data
+      session, // passed as $context
+    );
+
+    expect(model.$props.isAdmin).to.equal(true);
+    expect(model.$props.isGuest).to.equal(false);
+    expect(model.$props.isAuthenticated).to.equal(true);
+    expect(model.$props.isOwner).to.equal(true);
+    expect(model.$props.authId).to.equal('user_id_1');
+    expect(model.$props.authorId).to.equal('user_id_1');
+
+    // allowed to read by $default.read rule
+    expect(model.authorId).to.equal('user_id_1');
+
+    // allowed to read since $props.isAdmin
+    expect(model.adminField).to.equal('adminFieldValue');
+
+    // allowed to read since $props.isAuthenticated
+    expect(model.authField).to.equal('authFieldValue');
+
+    // not allowed to read since !$props.isGuest
+    expect(() => model.guestField).to.throw(/guestField/); // throws Error("Cannot access 'guestField'")
+
+    // allowed to read since $props.isOwner
+    expect(model.ownerField).to.equal('ownerFieldValue');
+
+    // not allowed to read
+    expect(() => model.notAllowedField).to.throw('not allowed'); // throws Error('not allowed')
+
+    // not allowed to read; returns null
+    expect(model.nullField).to.equal(null);
+
+    // rule is undefined
+    expect(model.undefinedField).to.equal(undefined);
+  });
 });
