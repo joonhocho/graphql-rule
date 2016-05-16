@@ -242,8 +242,8 @@ describe('GraphQLModel', () => {
           type: 'Child',
         },
         children: {
-          type: 'Child',
-          list: true,
+          type: '[Child]',
+          // type: 'Child', list: true,
           readListItem: ({$data}) => $data.id <= 3,
         },
       },

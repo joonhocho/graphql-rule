@@ -37,6 +37,8 @@ const createModelMapFn = (Class) => function(data) {
 
 const createSimpleGetter = (key) => function() { return this._data[key]; };
 
+const listRegexp = /\[\s*(.*?)\s*\]/;
+
 const wrapGetterWithModel = (key, getter, {type, list, readListItem}) => {
   if (!type) {
     return getter;
@@ -44,6 +46,12 @@ const wrapGetterWithModel = (key, getter, {type, list, readListItem}) => {
 
   let mapFn;
   if (typeof type === 'string') {
+    const listMatch = type.match(listRegexp);
+    if (listMatch) {
+      list = true;
+      type = listMatch[1];
+    }
+
     mapFn = function(data) {
       if (!models[type]) {
         throw new Error(`Unknown field model. model='${type}'`);
