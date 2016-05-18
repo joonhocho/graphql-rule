@@ -213,7 +213,6 @@ var schema = new graphql.GraphQLSchema({
 
 app.use('/graphql', graphqlHTTP((request) => ({
   schema: schema,
-  
   // pass session data as `context`.
   // becomes available as third parameter in field `resolve` functions.
   context: request.session,
