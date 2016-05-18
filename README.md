@@ -201,6 +201,9 @@ var schema = new graphql.GraphQLSchema({
           id: { type: graphql.GraphQLString }
         },
         resolve: function (_, args, session) {
+          // `context` is passed as the third parameter of `resolve` function.
+          // pass the `context` as the second parameter of `User`.
+          // Now your data is secured by predefined rules!
           return new User(userDatabase[args.id], session);
         }
       }
@@ -215,7 +218,7 @@ app.use('/graphql', graphqlHTTP((request) => ({
 ```
 
 
-### More $props / $context
+### More $props and $context
 ```javascript
 
 const Model = Rule.create({
@@ -332,7 +335,7 @@ model.undefinedField === undefined;
 ```
 
 
-### Advanced Usage
+### Even More Advanced Usage
 Take a look at [test file](https://github.com/joonhocho/graphql-rule/blob/master/test/index.js).
 
 
