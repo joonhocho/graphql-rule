@@ -403,7 +403,151 @@ describe('graphql-rule', () => {
   });
 
 
-  it('README', () => {
+  it('README without GraphQL', () => {
+    // create access control model for your data
+    const Model = create({
+      // name for this access model
+      name: 'Model',
+
+      // define access rules
+      rules: {
+        // allow access to `public` property.
+        public: true,
+
+        secret: {
+          // disallow access to `secret` property.
+          read: false,
+
+          // throw an error when read is disallowed.
+          readFail: () => { throw new Error('Access denied'); },
+        },
+
+        conditional: {
+          // access raw data via `$data`.
+          // conditionally allow access if `conditional` <= 3.
+          read: (model) => model.$data.conditional <= 3,
+
+          readFail: (model) => { throw new Error(`${model.$data.conditional} > 3`); },
+        },
+      },
+    });
+
+
+    // create a wrapped instance of your data.
+    const securedData = new Model({
+      public: 'public data',
+      secret: 'something secret',
+      conditional: 5,
+    });
+
+    expect(securedData.public).to.equal('public data');
+
+    expect(() => securedData.secret).to.throw('Access denied');
+
+    expect(() => securedData.conditional).to.throw('5 > 3');
+
+
+    // same access model for different data.
+    const securedData2 = new Model({conditional: 1});
+
+    expect(securedData2.conditional).to.equal(1); // 1 since 1 < 3.
+  });
+
+
+  it('README without GraphQL', () => {
+    // set default `readFail`
+    config({
+      readFail: () => { throw new Error('Access denied'); },
+    });
+
+    const User = create({
+      name: 'User',
+
+      // props are lazily initialized and cached once initialized.
+      // accessible via `model.$props`.
+      props: {
+        isAdmin: (model) => model.$context.admin,
+
+        isAuthenticated: (model) => Boolean(model.$context.userId),
+
+        isOwner: (model) => model.$data.id === model.$context.userId,
+      },
+
+      rules: {
+        id: true,
+
+        email: {
+          // allow access by admin or owner.
+          read: (model) => model.$props.isAdmin || model.$props.isOwner,
+
+          // returns null when read denied.
+          readFail: null,
+        },
+
+        password: false,
+
+        profile: {
+          // Use `Profile` Rule for `profile`.
+          type: 'Profile',
+
+          // allow access by all authenticated users
+          read: (model) => model.$props.isAuthenticated,
+
+          readFail: () => { throw new Error('Login Required'); },
+        },
+      },
+    });
+
+    const Profile = create({
+      name: 'Profile',
+
+      rules: {
+        name: true,
+
+        phone: {
+          // Access `User` model via `$parent`.
+          read: (model) => model.$parent.$props.isAdmin || model.$parent.$props.isOwner,
+
+          readFail: () => { throw new Error('Not authorized!'); },
+        },
+      },
+    });
+
+
+    const session = {
+      userId: 'session_user_id',
+      admin: false,
+    };
+
+    const userData = {
+      id: 'user_id',
+      email: 'user@example.com',
+      password: 'secret',
+      profile: {
+        name: 'John Doe',
+        phone: '123-456-7890',
+      },
+    };
+
+    // pass `session` as a second param to make it available as `$context`.
+    const user = new User(userData, session);
+
+    expect(user.id).to.equal('user_id');
+
+    expect(user.email).to.be.null; // `null` since not admin nor owner.
+
+    expect(() => user.password).to.throw('Access denied');
+
+    // `Profile` instance. accessible since authenticated.
+    expect(user.profile).to.be.an.instanceof(Profile);
+
+    expect(user.profile.name).to.equal('John Doe');
+
+    expect(() => user.profile.phone).to.throw('Not authorized!');
+  });
+
+
+  it('README $context', () => {
     const Model = create({
       name: 'Model',
       props: {

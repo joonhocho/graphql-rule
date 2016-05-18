@@ -15,6 +15,7 @@ const getCleanObject = () => Object.create(null);
 
 const createSetter = (key) => function set(value) {
   this._data[key] = value;
+  // Removes cache
   delete this[key];
 };
 
