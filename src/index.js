@@ -152,6 +152,10 @@ export const create = ({
   name,
   base = Model,
   props = getCleanObject(),
+  defaultRule: {
+    read: defaultRead = globalDefaultRead,
+    readFail: defaultReadFail = globalDefaultReadFail,
+  } = {},
   rules = getCleanObject(),
   interfaces = [],
 } = {}) => {
@@ -203,15 +207,7 @@ export const create = ({
 
 
   // rules
-  const {
-    $default: {
-      read: defaultRead = globalDefaultRead,
-      readFail: defaultReadFail = globalDefaultReadFail,
-    } = {},
-    ...otherRules,
-  } = rules;
-
-  forEach(otherRules, (rule, key) => {
+  forEach(rules, (rule, key) => {
     if (rule === true) {
       rule = {
         read: true,

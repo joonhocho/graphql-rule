@@ -3,7 +3,7 @@ import chaiAsPromised from 'chai-as-promised';
 chai.use(chaiAsPromised);
 import {config, create, clear, Model} from '../lib';
 
-describe('GraphQLModel', () => {
+describe('graphql-rule', () => {
   beforeEach(() => {
     clear();
     config({
@@ -425,16 +425,16 @@ describe('GraphQLModel', () => {
         // props.authorId === props.authId
         isOwner: (model) => model.$props.authorId === model.$props.authId,
       },
+      defaultRule: {
+        // read allowed by default
+        read: (model) => true,
+
+        // throws an error when read not allowed
+        readFail: (model, key) => { throw new Error(`Cannot access '${key}'`); },
+      },
       rules: {
-        $default: {
-          // read allowed by default
-          read: (model) => true,
 
-          // throws an error when read not allowed
-          readFail: (model, key) => { throw new Error(`Cannot access '${key}'`); },
-        },
-
-        // use $default settings
+        // use defaultRule settings
         authorId: {},
 
         // above is equivalent to:
@@ -489,7 +489,7 @@ describe('GraphQLModel', () => {
     expect(model.$props.authId).to.equal('user_id_1');
     expect(model.$props.authorId).to.equal('user_id_1');
 
-    // allowed to read by $default.read rule
+    // allowed to read by defaultRule.read rule
     expect(model.authorId).to.equal('user_id_1');
 
     // allowed to read since $props.isAdmin

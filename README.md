@@ -37,16 +37,16 @@ const Model = create({
     // props.authorId === props.authId
     isOwner: (model) => model.$props.authorId === model.$props.authId,
   },
-  rules: {
-    $default: {
-      // read allowed by default
-      read: (model) => true,
-      
-      // throws an error when read not allowed
-      readFail: (model, key) => { throw new Error(`Cannot access '${key}'`); },
-    },
+  defaultRule: {
+    // read allowed by default
+    read: (model) => true,
     
-    // use $default settings
+    // throws an error when read not allowed
+    readFail: (model, key) => { throw new Error(`Cannot access '${key}'`); },
+  },
+  rules: {
+    
+    // use defaultRule settings
     authorId: {},
     
     // read allowed only if `props.isAdmin`
@@ -104,7 +104,7 @@ model.$props.isOwner === true;
 model.$props.authId === 'user_id_1';
 model.$props.authorId === 'user_id_1';
 
-// allowed to read by $default.read rule
+// allowed to read by defaultRuledefault.read rule
 model.authorId === 'user_id_1';
 
 // allowed to read since $props.isAdmin
