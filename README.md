@@ -3,7 +3,7 @@ Unopinionated rule based access / authorization / permission control for GraphQL
 
 Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
 
-It actually has no dependencies to GraphQL. You can use it for any rule-base access control!
+It actually has no dependencies to GraphQL. You can use it with plain js objects!
 
 
 
