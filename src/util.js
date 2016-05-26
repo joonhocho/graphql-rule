@@ -118,3 +118,11 @@ export function inheritClass(classA, classB) {
   inheritPrototype(classA, classB);
   return classA;
 }
+
+export function isPromise(x) {
+  return x != null && typeof x.then === 'function';
+}
+
+export function getCleanObject() {
+  return Object.create(null);
+}

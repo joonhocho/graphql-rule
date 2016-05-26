@@ -6,12 +6,12 @@ import {
   defineGetterSetter,
   defineLazyProperty,
   inheritClass,
+  getCleanObject,
+  isPromise,
 } from './util';
 
 
 const SIGNATURE = {};
-
-const getCleanObject = () => Object.create(null);
 
 const createSetter = (key) => function set(value) {
   this._data[key] = value;
@@ -29,20 +29,27 @@ let globalDefaultCache = true;
 const getModel = (model) =>
   typeof model === 'string' ? models[model] : model;
 
+
 const createChildModel = (parent, Class, data) =>
   new Class(data, parent._context, parent, parent._root);
+
 
 const createModelMapFn = (Class) => function(data) {
   return data && createChildModel(this, Class, data);
 };
 
-const createSimpleGetter = (key) => function() { return this._data[key]; };
+
+const createSimpleGetter = (key) => function() {
+  return this._data[key];
+};
+
 
 const listRegexp = /\[\s*(.*?)\s*\]/;
 
-const wrapGetterWithModel = (key, getter, {type, list, readListItem}) => {
+
+const wrapGetterWithModel = ({type, list, readListItem}) => {
   if (!type) {
-    return getter;
+    return null;
   }
 
   let mapFn;
@@ -65,78 +72,111 @@ const wrapGetterWithModel = (key, getter, {type, list, readListItem}) => {
   }
 
   if (list) {
-    // List type field.
     if (readListItem) {
-      // filter item
-      return function get() {
-        const val = getter.call(this);
-        return val && val.map(mapFn, this).filter(readListItem, this);
-      };
+      return (obj, key, value) =>
+        value && value.map(mapFn, obj).filter(
+          (item) => readListItem(item, obj, key, value)
+        );
     }
 
-    return function get() {
-      const val = getter.call(this);
-      return val && val.map(mapFn, this);
-    };
+    return (obj, key, value) => value && value.map(mapFn, obj);
   }
 
   // Non-list type field.
-  return function get() {
-    return mapFn.call(this, getter.call(this));
-  };
+  return (obj, key, value) => mapFn.call(obj, value);
 };
 
-const wrapGetterWithAccess = (key, getter, {read, readFail}) => {
+
+const wrapGetterWithAccess = ({read, readFail}) => {
   if (read === true) {
-    return getter;
+    return null;
   }
 
   if (!read) {
     if (typeof readFail === 'function') {
-      return function get() {
-        return readFail(this, key);
-      };
+      return readFail;
     }
-    return function get() { return readFail; };
+    return () => readFail;
   }
 
   if (typeof readFail === 'function') {
-    return function get() {
-      if (read(this, key)) {
-        return getter.call(this);
+    return (obj, key, value) => {
+      if (read(obj, key, value)) {
+        return value;
       }
-      return readFail(this, key);
+      return readFail(obj, key, value);
     };
   }
 
-  return function get() {
-    if (read(this, key)) {
-      return getter.call(this);
+  return (obj, key, value) => {
+    if (read(obj, key, value)) {
+      return value;
     }
     return readFail;
   };
 };
 
-const wrapGetterWithCache = (key, getter, {cache = globalDefaultCache}) => {
+
+const mapValueWithCache = ({cache = globalDefaultCache}) => {
   if (!cache) {
-    return getter;
+    return null;
   }
 
-  return function get() {
-    const value = getter.call(this);
-    this[key] = value;
-    setProperty(this, key, value);
+  return (obj, key, value) => {
+    obj[key] = value;
+    setProperty(obj, key, value);
     return value;
   };
 };
 
+
+const cerateValueMapper = (fn, key) => (obj, value) => fn(obj, key, value);
+
+
+const createValueReducer = (fns, key) => (obj, value) => fns.reduce(
+  (lastValue, fn) => fn(obj, key, lastValue),
+  value
+);
+
+
+const createPromiseWrapper = (key, reducer, promise) => promise ?
+  function() {
+    const p = this._data[key];
+    if (isPromise(p)) {
+      return p.then((val) => reducer(this, val));
+    }
+    return reducer(this, p);
+  } :
+  function() {
+    return reducer(this, this._data[key]);
+  };
+
+
+const createNonPromiseWrapper = (key, reducer) => function() {
+  const p = this._data[key];
+  if (isPromise(p)) {
+    return p.then((val) => reducer(this, val));
+  }
+  return reducer(this, p);
+};
+
+
 const createGetter = (prototype, key, rule) => {
-  let getter;
-  getter = createSimpleGetter(key);
-  getter = wrapGetterWithModel(key, getter, rule);
-  getter = wrapGetterWithAccess(key, getter, rule);
-  getter = wrapGetterWithCache(key, getter, rule);
-  return getter;
+  const fns = [
+    wrapGetterWithModel(rule),
+    wrapGetterWithAccess(rule),
+    mapValueWithCache(rule),
+  ].filter((x) => x);
+
+  if (!fns.length) {
+    return createSimpleGetter(key);
+  }
+
+  const reducer = fns.length > 1 ?
+    createValueReducer(fns, key) :
+    cerateValueMapper(fns[0], key);
+
+  return createPromiseWrapper(key, reducer, rule.promise);
 };
 
 

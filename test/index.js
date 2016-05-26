@@ -403,6 +403,48 @@ describe('graphql-rule', () => {
   });
 
 
+  it('supports promise', (done) => {
+    const Child = create({
+      name: 'Child',
+      rules: {
+        v: {
+          read: (model, key, value) => value === true,
+          promise: true,
+        },
+      },
+    });
+
+    const Model = create({
+      name: 'Model',
+      rules: {
+        a: {
+          type: 'Child',
+          read: (model, key, value) => value instanceof Child,
+          promise: true,
+        },
+      },
+    });
+
+    const m = new Model({
+      a: Promise.resolve({v: Promise.resolve(true)}),
+    });
+
+    const m2 = new Model({
+      a: Promise.resolve({v: false}),
+    });
+
+    const m3 = new Model({
+      a: Promise.resolve(null),
+    });
+
+    Promise.all([
+      m.a.then((a) => a.v).then((v) => expect(v).to.equal(true)),
+      m2.a.then((a) => a.v).then((v) => expect(v).to.equal(null)),
+      m3.a.then((a) => expect(a).to.equal(null)),
+    ]).then(() => done(), done);
+  });
+
+
   it('README without GraphQL', () => {
     // create access control model for your data
     const Model = create({
