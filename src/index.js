@@ -123,7 +123,6 @@ const mapValueWithCache = ({cache = globalDefaultCache}) => {
   }
 
   return (obj, key, value) => {
-    obj[key] = value;
     setProperty(obj, key, value);
     return value;
   };
