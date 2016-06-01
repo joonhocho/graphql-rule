@@ -309,18 +309,20 @@ export const create = ({
   // rules
   forEach(rules, (rule, key) => {
     const ruleType = typeof rule;
-    if (ruleType === 'boolean' || ruleType === 'function') {
+    if (ruleType === 'string' || rule && rule.$signature === SIGNATURE) {
+      rule = {
+        type: rule,
+      };
+    } else if (ruleType === 'boolean') {
       rule = {
         preRead: rule,
         read: rule,
       };
-    } else if (!rule) {
-      rule = null;
-    } else if (ruleType === 'string' || rule.$signature === SIGNATURE) {
+    } else if (ruleType === 'function') {
       rule = {
-        type: rule,
+        read: rule,
       };
-    } else if (ruleType !== 'object') {
+    } else if (!rule || ruleType !== 'object') {
       rule = null;
     }
 
