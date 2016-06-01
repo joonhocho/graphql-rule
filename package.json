@@ -1,6 +1,6 @@
 {
   "name": "graphql-rule",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Rule based access control for GraphQL fields",
   "main": "lib/index.js",
   "directories": {
