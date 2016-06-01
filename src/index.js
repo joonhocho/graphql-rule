@@ -3,6 +3,7 @@ import {
   setProperty,
   defineClassName,
   defineStatic,
+  defineMethod,
   defineGetterSetter,
   defineLazyProperty,
   inheritClass,
@@ -21,6 +22,7 @@ const createSetter = (key) => function set(value) {
 
 
 let models = getCleanObject();
+let globalDefaultPreRead = true;
 let globalDefaultRead = true;
 let globalDefaultReadFail = null;
 let globalDefaultCache = true;
@@ -36,11 +38,6 @@ const createChildModel = (parent, Class, data) =>
 
 const createModelMapFn = (Class) => function(data) {
   return data && createChildModel(this, Class, data);
-};
-
-
-const createSimpleGetter = (key) => function() {
-  return this._data[key];
 };
 
 
@@ -87,37 +84,25 @@ const wrapGetterWithModel = ({type, list, readListItem}) => {
 };
 
 
-const wrapGetterWithAccess = ({read, readFail}) => {
+const wrapGetterWithReadAccess = ({read, readFail}) => {
   if (read === true) {
     return null;
   }
 
   if (!read) {
-    if (typeof readFail === 'function') {
-      return readFail;
-    }
-    return () => readFail;
-  }
-
-  if (typeof readFail === 'function') {
-    return (obj, key, value) => {
-      if (read(obj, key, value)) {
-        return value;
-      }
-      return readFail(obj, key, value);
-    };
+    return readFail;
   }
 
   return (obj, key, value) => {
     if (read(obj, key, value)) {
       return value;
     }
-    return readFail;
+    return readFail(obj, key, value);
   };
 };
 
 
-const mapValueWithCache = ({cache = globalDefaultCache}) => {
+const wrapGetterWithCache = ({cache = globalDefaultCache}) => {
   if (!cache) {
     return null;
   }
@@ -129,8 +114,7 @@ const mapValueWithCache = ({cache = globalDefaultCache}) => {
 };
 
 
-const cerateValueMapper = (fn, key) => (obj, value) => fn(obj, key, value);
-
+const createValueMapper = (fn, key) => (obj, value) => fn(obj, key, value);
 
 const createValueReducer = (fns, key) => (obj, value) => fns.reduce(
   (lastValue, fn) => fn(obj, key, lastValue),
@@ -138,50 +122,125 @@ const createValueReducer = (fns, key) => (obj, value) => fns.reduce(
 );
 
 
-const createPromiseWrapper = (key, reducer, promise) => promise ?
-  function() {
-    const p = this._data[key];
-    if (isPromise(p)) {
-      return p.then((val) => reducer(this, val));
-    }
-    return reducer(this, p);
-  } :
-  function() {
-    return reducer(this, this._data[key]);
-  };
-
-
-const createNonPromiseWrapper = (key, reducer) => function() {
-  const p = this._data[key];
-  if (isPromise(p)) {
-    return p.then((val) => reducer(this, val));
+const mapPromise = (obj, val, map) => {
+  if (isPromise(val)) {
+    return val.then((x) => map(obj, x));
   }
-  return reducer(this, p);
+  return map(obj, val);
 };
 
 
-const createGetter = (prototype, key, rule) => {
+const createSimpleGetter = (key) => function() {
+  return this._data[key];
+};
+
+const createSimpleMethod = (key) => function() {
+  const data = this._data;
+  return data[key].apply(data, arguments);
+};
+
+
+const createPromiseWrapper = (key, reducer) => function() {
+  const val = this._data[key];
+  return mapPromise(this, val, reducer);
+};
+
+const createPromiseWrapperForMethod = (key, reducer) => function() {
+  const data = this._data;
+  const val = data[key].apply(data, arguments);
+  return mapPromise(this, val, reducer);
+};
+
+
+const wrapGetterWithPreReadAccess = (key, getter, {preRead, readFail}) => {
+  if (preRead === true) {
+    return getter;
+  }
+
+  if (!preRead) {
+    return function() {
+      return readFail(this, key);
+    };
+  }
+
+  return function() {
+    if (preRead(this, key)) {
+      return getter.call(this);
+    }
+    return readFail(this, key);
+  };
+};
+
+const wrapMethodWithPreReadAccess = (key, method, {preRead, readFail}) => {
+  if (preRead === true) {
+    return method;
+  }
+
+  if (!preRead) {
+    return function() {
+      return readFail(this, key);
+    };
+  }
+
+  return function() {
+    if (preRead(this, key)) {
+      return method.apply(this, arguments);
+    }
+    return readFail(this, key);
+  };
+};
+
+
+const createGetter = (key, rule) => {
   const fns = [
     wrapGetterWithModel(rule),
-    wrapGetterWithAccess(rule),
-    mapValueWithCache(rule),
+    wrapGetterWithReadAccess(rule),
+    wrapGetterWithCache(rule),
   ].filter((x) => x);
 
+  let getter;
   if (!fns.length) {
-    return createSimpleGetter(key);
+    getter = createSimpleGetter(key);
+    getter = wrapGetterWithPreReadAccess(key, getter, rule);
+    return getter;
   }
 
   const reducer = fns.length > 1 ?
     createValueReducer(fns, key) :
-    cerateValueMapper(fns[0], key);
+    createValueMapper(fns[0], key);
 
-  return createPromiseWrapper(key, reducer, rule.promise);
+  getter = createPromiseWrapper(key, reducer);
+  getter = wrapGetterWithPreReadAccess(key, getter, rule);
+  return getter;
+};
+
+const createMethod = (key, rule) => {
+  const fns = [
+    wrapGetterWithModel(rule),
+    wrapGetterWithReadAccess(rule),
+  ].filter((x) => x);
+
+  let method;
+  if (!fns.length) {
+    method = createSimpleMethod(key);
+    method = wrapMethodWithPreReadAccess(key, method, rule);
+    return method;
+  }
+
+  const reducer = fns.length > 1 ?
+    createValueReducer(fns, key) :
+    createValueMapper(fns[0], key);
+
+  method = createPromiseWrapperForMethod(key, reducer);
+  method = wrapMethodWithPreReadAccess(key, method, rule);
+  return method;
 };
 
 
 // exports
 
 export const config = (defaults) => {
+  if ('preRead' in defaults) globalDefaultPreRead = defaults.preRead;
   if ('read' in defaults) globalDefaultRead = defaults.read;
   if ('readFail' in defaults) globalDefaultReadFail = defaults.readFail;
   if ('cache' in defaults) globalDefaultCache = Boolean(defaults.cache);
@@ -193,6 +252,7 @@ export const create = ({
   base = Model,
   props = getCleanObject(),
   defaultRule: {
+    preRead: defaultPreRead = globalDefaultPreRead,
     read: defaultRead = globalDefaultRead,
     readFail: defaultReadFail = globalDefaultReadFail,
   } = {},
@@ -248,32 +308,48 @@ export const create = ({
 
   // rules
   forEach(rules, (rule, key) => {
-    if (rule === true) {
+    const ruleType = typeof rule;
+    if (ruleType === 'boolean' || ruleType === 'function') {
       rule = {
-        read: true,
-        readFail: defaultReadFail,
-      };
-    } else if (rule === false) {
-      rule = {
-        read: false,
-        readFail: defaultReadFail,
-      };
-    } else if (typeof rule === 'function') {
-      rule = {
+        preRead: rule,
         read: rule,
-        readFail: defaultReadFail,
       };
-    } else {
-      if (rule.read === undefined) rule.read = defaultRead;
-      if (rule.readFail === undefined) rule.readFail = defaultReadFail;
+    } else if (!rule) {
+      rule = null;
+    } else if (ruleType === 'string' || rule.$signature === SIGNATURE) {
+      rule = {
+        type: rule,
+      };
+    } else if (ruleType !== 'object') {
+      rule = null;
     }
 
-    defineGetterSetter(
-      NewModel.prototype,
-      key,
-      createGetter(NewModel.prototype, key, rule),
-      createSetter(key)
-    );
+    if (!rule) {
+      throw new Error(`Invalid rule for ${key}`);
+    }
+
+    if (rule.preRead === undefined) rule.preRead = defaultPreRead;
+    if (rule.read === undefined) rule.read = defaultRead;
+    if (rule.readFail === undefined) rule.readFail = defaultReadFail;
+    const {readFail} = rule;
+    if (typeof readFail !== 'function') {
+      rule.readFail = () => readFail;
+    }
+
+    if (rule.method) {
+      defineMethod(
+        NewModel.prototype,
+        key,
+        createMethod(key, rule),
+      );
+    } else {
+      defineGetterSetter(
+        NewModel.prototype,
+        key,
+        createGetter(key, rule),
+        createSetter(key)
+      );
+    }
   });
 
   return NewModel;

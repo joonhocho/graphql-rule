@@ -1,3 +1,4 @@
+require('es6-promise').polyfill();
 import chai, {expect} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 chai.use(chaiAsPromised);
@@ -238,9 +239,7 @@ describe('graphql-rule', () => {
     const Parent = create({
       name: 'Parent',
       rules: {
-        child: {
-          type: 'Child',
-        },
+        child: 'Child',
         children: {
           type: '[Child]',
           // type: 'Child', list: true,
@@ -409,7 +408,6 @@ describe('graphql-rule', () => {
       rules: {
         v: {
           read: (model, key, value) => value === true,
-          promise: true,
         },
       },
     });
@@ -420,7 +418,6 @@ describe('graphql-rule', () => {
         a: {
           type: 'Child',
           read: (model, key, value) => value instanceof Child,
-          promise: true,
         },
       },
     });
@@ -442,6 +439,100 @@ describe('graphql-rule', () => {
       m2.a.then((a) => a.v).then((v) => expect(v).to.equal(null)),
       m3.a.then((a) => expect(a).to.equal(null)),
     ]).then(() => done(), done);
+  });
+
+
+  it('supports method with arguments', () => {
+    const Model = create({
+      name: 'Model',
+      rules: {
+        getA: {
+          read: true,
+          method: true,
+        },
+      },
+    });
+
+    const m = new Model({
+      getA(add) {
+        return this.a + add;
+      },
+      a: 3,
+    });
+
+    expect(m.getA(2)).to.equal(5);
+    expect(m.a).to.be.undefined;
+  });
+
+
+  it('supports method whose return value is child type', (done) => {
+    const Child = create({
+      name: 'Child',
+      rules: {
+        v: true,
+      },
+    });
+
+    const Model = create({
+      name: 'Model',
+      rules: {
+        getA: {
+          read: true,
+          method: true,
+          type: 'Child',
+        },
+      },
+    });
+
+    const m = new Model({
+      getA(add) {
+        return Promise.resolve({v: this.a + add});
+      },
+      a: 3,
+    });
+
+    Promise.all([
+      m.getA(2).then((c) => {;
+        expect(c).to.be.an.instanceof(Child);
+        expect(c.v).to.equal(5);
+        expect(m.getA(2)).to.not.equal(m.getA(2));
+      }),
+      m.getA(4).then((c) => {
+        expect(c.v).to.equal(7);
+      }),
+    ]).then(() => done(), done);
+  });
+
+
+  it('supports preRead', () => {
+    const Model = create({
+      name: 'Model',
+      rules: {
+        a: {
+          preRead: false,
+          cache: false,
+        },
+        getB: {
+          preRead: false,
+          method: true,
+        },
+      },
+    });
+
+    let a = 0;
+    let b = 0;
+    const m = new Model({
+      get a() { return ++a; },
+      getB() { return ++b; }
+    });
+
+    expect(m.a).to.be.null;
+    expect(m.a).to.be.null;
+    expect(a).to.equal(0);
+
+    expect(m.getB()).to.be.null;
+    expect(m.getB()).to.be.null;
+    expect(b).to.equal(0);
   });
 
 
