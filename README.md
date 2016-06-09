@@ -1,4 +1,10 @@
 # graphql-rule
+[![Build Status](https://travis-ci.org/joonhocho/graphql-rule.svg?branch=master)](https://travis-ci.org/joonhocho/graphql-rule)
+[![Coverage Status](https://coveralls.io/repos/github/joonhocho/graphql-rule/badge.svg?branch=master)](https://coveralls.io/github/joonhocho/graphql-rule?branch=master)
+[![npm version](https://badge.fury.io/js/graphql-rule.svg)](https://badge.fury.io/js/graphql-rule)
+[![Dependency Status](https://david-dm.org/joonhocho/graphql-rule.svg)](https://david-dm.org/joonhocho/graphql-rule)
+[![License](http://img.shields.io/:license-mit-blue.svg)](http://doge.mit-license.org)
+
 Unopinionated rule based access / authorization / permission control for GraphQL type fields.
 
 Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.

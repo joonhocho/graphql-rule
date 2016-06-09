@@ -1,9 +1,7 @@
 if (typeof Promise === 'undefined') {
   require('es6-promise').polyfill();
 }
-import chai, {expect} from 'chai';
-import chaiAsPromised from 'chai-as-promised';
-chai.use(chaiAsPromised);
+import {expect} from 'chai';
 import {config, create, clear, Model} from '../lib';
 
 describe('graphql-rule', () => {
