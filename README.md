@@ -11,6 +11,8 @@ Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
 
 It actually has no dependencies to GraphQL. You can use it with plain js objects!
 
+Supports Node.js >= 4.0.
+
 
 
 ### Install
