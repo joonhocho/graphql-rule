@@ -30,6 +30,89 @@ It is designed for access control in GraphQL, but it is not opinionated nor requ
 Thus, it can be used for all projects with or without GraphQL.
 
 
+
+### API - Rule.create(options)
+```javascript
+import Rule from 'graphql-rule';
+
+Rule.create({
+  // [REQUIRED] Unique rule model name.
+  // Used for child field type specification.
+  name: string = null,
+  
+  // Base class for newly created and returned rule model class.
+  // Base class must extend {Model} from 'graphql-rule'.
+  base: ?class = class<Model>,
+  
+  // Define dynamic property getters.
+  // Can be accessed via `model.$props.propName`
+  // Each property is lazily initialized upon the first access and cached for performance.
+  // Useful for something expensive to calculate and is accessed over and over by multiple fields.
+  props: {
+    [propName: string]: (model: Model) => any,
+  } = {},
+  
+  // Define default rule for fields in this model.
+  defaultRule: {
+    // `preRead` is checked before accessing or calling a field.
+    // Useful for failing fast before accessing field that can be expensive to calculate such as field that initiates network calls
+    // If `false` or `preRead(model, key)` returns falsy value, the access to field will fail immediately.
+    // [default=true]
+    preRead: boolean | (model: Model, key: string) => boolean,
+    
+    // `read` is checked after accessing or calling a field.
+    // Useful for passing/failing based on the field value.
+    // If `false` or `read(model, key, value)` returns falsy value, the access to field will fail immediately.
+    // [default=true]
+    read: boolean | (model: Model, key: string, value: any) => boolean,
+    
+    // `readFail` is used when either `preRead` or `read` returns falsy value.
+    // If it is not a function, it is used as a final value for the failed field.
+    // If it is function, the returend value is used as a final value for the failed field.
+    // It can throw an error, if throwing an error is a desired upon unauthorized access to a field.
+    // [default=null]
+    readFail: any | (model: Model, key: string, value: ?any) => any,
+  } = {preRead: true, read: true, readFail: null},
+  
+  // Define access rule for fields in this model.
+  rules: {
+    [fieldName: string]: {
+      // See `defaultRule.preRead`
+      preRead,
+      
+      // See `defaultRule.read`
+      read,
+      
+      // See `defaultRule.readFail`
+      readFail,
+      
+      // If specified, field value will be wrapped as an instance of the specified Model class.
+      type: string | class<Model> = null,
+      
+      // Whether the field returns a list of Model instances.
+      // Used together with `type` above.
+      list: boolean = false,
+      
+      // Filter function for list.
+      // Used together with `list` above.
+      readListItem: (listItem: FieldModel, model: Model, key: string, list: [FieldModel]) => boolean
+      
+      // Whether the field is a function method.
+      method: boolean = false,
+      
+      // Whether to cached the final value for the field.
+      // Only applied if `method: false` above.
+      cache: boolean = true,
+    },
+  },
+  
+  // Interfaces to inherit static and prototype properties and methods from.
+  // Useful if you have common props / field rules / etc.
+  interfaces: [class<Model>] = [],
+})
+```
+
+
 ### Basic Usage without GraphQL
 ```javascript
 import Rule from 'graphql-rule';
@@ -343,6 +426,7 @@ model.nullField === null;
 // rule is undefined
 model.undefinedField === undefined;
 ```
+
 
 
 ### Even More Advanced Usage
