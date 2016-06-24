@@ -22,6 +22,31 @@ npm install --save graphql-rule
 
 
 ### How It Works
+`graphql-rule` is simply an authorization layer between your data and data accessor (`resolve` functions in GraphQL).
+
+
+    Without `graphql-rule`:
+    +-------------+           +------------+
+    |             |           |            |
+    |             |           |            |
+    |   GraphQL   |   +--->   |    Data    |
+    |             |           |            |
+    |             |           |            |
+    |             |           |            |
+    +-------------+           +------------+
+
+
+    With `graphql-rule`:
+    +-------------+           +------------+           +------------+
+    |             |           |            |           |            |
+    |             |           |            |           |            |
+    |   GraphQL   |   +--->   |   Rules    |   +--->   |    Data    |
+    |             |           |            |           |            |
+    |             |           |            |           |            |
+    |             |           |            |           |            |
+    +-------------+           +------------+           +------------+
+
+
 You define access `rules` for each property of your data (object), and it will
 allow or disallow read to the property based on the predefined rules.
 (only read rules are supported for now).
