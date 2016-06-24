@@ -12,7 +12,6 @@
     "clear": "rm -rf ./lib ./coverage ./.nyc_output",
     "coverage": "nyc npm test && nyc report --reporter=text-lcov | coveralls",
     "nyc": "nyc npm test && nyc report --reporter=lcov",
-    "prepublish": "npm run clear && npm test",
     "pretest": "npm run build",
     "start": "npm test",
     "test": "mocha",
