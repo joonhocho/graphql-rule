@@ -326,10 +326,6 @@ const UserModel = mongoose.model('User', new mongoose.Schema({
 }));
 
 const ProfileModel = mongoose.model('Profile', new mongoose.Schema({
-  user: {
-    type: ObjectId,
-    ref: 'User',
-  },
   name: String,
   phone: String,
 }));
