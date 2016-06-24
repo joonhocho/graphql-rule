@@ -188,7 +188,7 @@ const UserRule = Rule.create({
   },
 
   rules: {
-    // allow access to all.
+    // Everyone can read `id`.
     id: true,
 
     email: {
@@ -199,7 +199,7 @@ const UserRule = Rule.create({
       readFail: null,
     },
 
-    // Disallow access to all.
+    // No one can read `password`.
     password: false,
 
     profile: {
