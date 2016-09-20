@@ -402,7 +402,42 @@ describe('graphql-rule', () => {
   });
 
 
-  it('supports promise', (done) => {
+  it('supports promise in props and rules', (done) => {
+    const Model = create({
+      name: 'Model',
+      props: {
+        promiseFalse: () => Promise.resolve(false),
+        promiseTrue: () => Promise.resolve(true),
+        readPromise: (model) => model.$props.promiseFalse.then(() => true)
+      },
+      rules: {
+        promiseFalse: {
+          read: (model) => model.$props.promiseFalse
+        },
+        promiseTrue: {
+          read: (model) => model.$props.promiseTrue
+        },
+        readPromise: {
+          read: (model) => model.$props.readPromise
+        },
+      },
+    });
+
+    const m = new Model({
+      promiseFalse: true,
+      promiseTrue: true,
+      readPromise: true,
+    });
+
+    Promise.all([
+      m.promiseFalse.then((promiseFalse) => expect(promiseFalse).to.equal(null)),
+      m.promiseTrue.then((promiseTrue) => expect(promiseTrue).to.equal(true)),
+      m.readPromise.then((readPromise) => expect(readPromise).to.equal(true)),
+    ]).then(() => done(), done);
+  });
+
+
+  it('supports promise in model', (done) => {
     const Child = create({
       name: 'Child',
       rules: {
