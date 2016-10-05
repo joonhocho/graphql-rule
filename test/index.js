@@ -2,7 +2,7 @@ if (typeof Promise === 'undefined') {
   require('es6-promise').polyfill();
 }
 import {expect} from 'chai';
-import {config, create, clear, Model} from '../lib';
+import {config, create, clear, Model} from '../src';
 
 describe('graphql-rule', () => {
   beforeEach(() => {
@@ -408,31 +408,67 @@ describe('graphql-rule', () => {
       props: {
         promiseFalse: () => Promise.resolve(false),
         promiseTrue: () => Promise.resolve(true),
-        readPromise: (model) => model.$props.promiseFalse.then(() => true)
       },
       rules: {
-        promiseFalse: {
-          read: (model) => model.$props.promiseFalse
+        readPromiseFalse: {
+          read: (model) => model.$props.promiseFalse,
         },
-        promiseTrue: {
-          read: (model) => model.$props.promiseTrue
+        readPromiseTrue: {
+          read: (model) => model.$props.promiseTrue,
         },
-        readPromise: {
-          read: (model) => model.$props.readPromise
+        readMethodPromiseFalse: {
+          read: (model) => model.$props.promiseFalse,
+          method: true,
+        },
+        readMethodPromiseTrue: {
+          read: (model) => model.$props.promiseTrue,
+          method: true,
+        },
+        preReadPromiseFalse: {
+          preRead: (model) => model.$props.promiseFalse,
+        },
+        preReadPromiseTrue: {
+          preRead: (model) => model.$props.promiseTrue,
+        },
+        preReadMethodPromiseFalse: {
+          preRead: (model) => model.$props.promiseFalse,
+          method: true,
+        },
+        preReadMethodPromiseTrue: {
+          preRead: (model) => model.$props.promiseTrue,
+          method: true,
         },
       },
     });
 
     const m = new Model({
-      promiseFalse: true,
-      promiseTrue: true,
-      readPromise: true,
+      readPromiseFalse: 'a',
+      readPromiseTrue: 'b',
+      readMethodPromiseFalse(a) {
+        return this.readPromiseTrue + a;
+      },
+      readMethodPromiseTrue(a) {
+        return this.readPromiseTrue + a;
+      },
+      preReadPromiseFalse: 'e',
+      preReadPromiseTrue: 'f',
+      preReadMethodPromiseFalse(a) {
+        return this.preReadPromiseTrue + a;
+      },
+      preReadMethodPromiseTrue(a) {
+        return this.preReadPromiseTrue + a;
+      },
     });
 
     Promise.all([
-      m.promiseFalse.then((promiseFalse) => expect(promiseFalse).to.equal(null)),
-      m.promiseTrue.then((promiseTrue) => expect(promiseTrue).to.equal(true)),
-      m.readPromise.then((readPromise) => expect(readPromise).to.equal(true)),
+      m.readPromiseFalse.then((v) => expect(v).to.equal(null)),
+      m.readPromiseTrue.then((v) => expect(v).to.equal('b')),
+      m.readMethodPromiseFalse('c').then((v) => expect(v).to.equal(null)),
+      m.readMethodPromiseTrue('d').then((v) => expect(v).to.equal('bd')),
+      m.preReadPromiseFalse.then((v) => expect(v).to.equal(null)),
+      m.preReadPromiseTrue.then((v) => expect(v).to.equal('f')),
+      m.preReadMethodPromiseFalse('g').then((v) => expect(v).to.equal(null)),
+      m.preReadMethodPromiseTrue('h').then((v) => expect(v).to.equal('fh')),
     ]).then(() => done(), done);
   });
 
@@ -527,7 +563,7 @@ describe('graphql-rule', () => {
     });
 
     Promise.all([
-      m.getA(2).then((c) => {;
+      m.getA(2).then((c) => {
         expect(c).to.be.an.instanceof(Child);
         expect(c.v).to.equal(5);
         expect(m.getA(2)).to.not.equal(m.getA(2));
@@ -558,7 +594,7 @@ describe('graphql-rule', () => {
     let b = 0;
     const m = new Model({
       get a() { return ++a; },
-      getB() { return ++b; }
+      getB() { return ++b; },
     });
 
     expect(m.a).to.be.null;
@@ -824,5 +860,59 @@ describe('graphql-rule', () => {
 
     // rule is undefined
     expect(model.undefinedField).to.equal(undefined);
+  });
+
+  it('"read" must be a function', () => {
+    expect(() =>
+      create({
+        name: 'Model',
+        rules: {
+          a: {
+            read: {},
+          },
+        },
+      })
+    ).to.throw('function');
+  });
+
+  it('"read" with method must be a function', () => {
+    expect(() =>
+      create({
+        name: 'Model',
+        rules: {
+          a: {
+            read: {},
+            method: true,
+          },
+        },
+      })
+    ).to.throw('function');
+  });
+
+  it('"preRead" must be a function', () => {
+    expect(() =>
+      create({
+        name: 'Model',
+        rules: {
+          a: {
+            preRead: {},
+          },
+        },
+      })
+    ).to.throw('function');
+  });
+
+  it('"preRead" with method must be a function', () => {
+    expect(() =>
+      create({
+        name: 'Model',
+        rules: {
+          a: {
+            preRead: {},
+            method: true,
+          },
+        },
+      })
+    ).to.throw('function');
   });
 });

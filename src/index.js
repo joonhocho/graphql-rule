@@ -28,8 +28,10 @@ let globalDefaultReadFail = null;
 let globalDefaultCache = true;
 
 
-const getModel = (model) =>
-  typeof model === 'string' ? models[model] : model;
+const getModel = (model) => {
+  if (typeof model === 'string') return models[model];
+  return model;
+};
 
 
 const createChildModel = (parent, Class, data) =>
@@ -45,9 +47,7 @@ const listRegexp = /\[\s*(.*?)\s*\]/;
 
 
 const wrapGetterWithModel = ({type, list, readListItem}) => {
-  if (!type) {
-    return null;
-  }
+  if (!type) return null;
 
   let mapFn;
   if (typeof type === 'string') {
@@ -85,34 +85,30 @@ const wrapGetterWithModel = ({type, list, readListItem}) => {
 
 
 const wrapGetterWithReadAccess = ({read, readFail}) => {
-  if (read === true) {
-    return null;
-  }
+  if (read === true) return null;
+  if (!read) return readFail;
 
-  if (!read) {
-    return readFail;
+  if (typeof read !== 'function') {
+    throw new Error("'read' must be either a boolean or a function");
   }
 
   return (obj, key, value) => {
     const canRead = read(obj, key, value);
     if (isPromise(canRead)) {
-      return canRead.then((canRead) => canRead ?
-        value :
-        readFail(obj, key, value)
-      );
+      return canRead.then((v) => {
+        if (v) return value;
+        return readFail(obj, key, value);
+      });
     }
-    if (canRead) {
-      return value;
-    }
+
+    if (canRead) return value;
     return readFail(obj, key, value);
   };
 };
 
 
 const wrapGetterWithCache = ({cache = globalDefaultCache}) => {
-  if (!cache) {
-    return null;
-  }
+  if (!cache) return null;
 
   return (obj, key, value) => {
     setProperty(obj, key, value);
@@ -160,9 +156,7 @@ const createPromiseWrapperForMethod = (key, reducer) => function() {
 
 
 const wrapGetterWithPreReadAccess = (key, getter, {preRead, readFail}) => {
-  if (preRead === true) {
-    return getter;
-  }
+  if (preRead === true) return getter;
 
   if (!preRead) {
     return function() {
@@ -170,18 +164,25 @@ const wrapGetterWithPreReadAccess = (key, getter, {preRead, readFail}) => {
     };
   }
 
+  if (typeof preRead !== 'function') {
+    throw new Error("'preRead' must be either a boolean or a function");
+  }
+
   return function() {
-    if (preRead(this, key)) {
-      return getter.call(this);
+    const canRead = preRead(this, key);
+    if (isPromise(canRead)) {
+      return canRead.then((v) => {
+        if (v) return getter.call(this);
+        return readFail(this, key);
+      });
     }
+    if (canRead) return getter.call(this);
     return readFail(this, key);
   };
 };
 
 const wrapMethodWithPreReadAccess = (key, method, {preRead, readFail}) => {
-  if (preRead === true) {
-    return method;
-  }
+  if (preRead === true) return method;
 
   if (!preRead) {
     return function() {
@@ -189,10 +190,20 @@ const wrapMethodWithPreReadAccess = (key, method, {preRead, readFail}) => {
     };
   }
 
+  if (typeof preRead !== 'function') {
+    throw new Error("'preRead' must be either a boolean or a function");
+  }
+
   return function() {
-    if (preRead(this, key)) {
-      return method.apply(this, arguments);
+    const canRead = preRead(this, key);
+    if (isPromise(canRead)) {
+      return canRead.then((v) => {
+        if (v) return method.apply(this, arguments);
+        return readFail(this, key);
+      });
     }
+
+    if (canRead) return method.apply(this, arguments);
     return readFail(this, key);
   };
 };
