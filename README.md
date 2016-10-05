@@ -89,7 +89,7 @@ Rule.create({
     // Useful for passing/failing based on the field value.
     // If `false` or `read(model, key, value)` returns falsy value, the access to field will fail immediately.
     // [default=true]
-    read: boolean | (model: Model, key: string, value: any) => boolean,
+    read: boolean | (model: Model, key: string, value: any) => boolean | Promise<boolean>,
     
     // `readFail` is used when either `preRead` or `read` returns falsy value.
     // If it is not a function, it is used as a final value for the failed field.
