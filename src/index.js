@@ -94,7 +94,14 @@ const wrapGetterWithReadAccess = ({read, readFail}) => {
   }
 
   return (obj, key, value) => {
-    if (read(obj, key, value)) {
+    const canRead = read(obj, key, value);
+    if (isPromise(canRead)) {
+      return canRead.then((canRead) => canRead ?
+        value :
+        readFail(obj, key, value)
+      );
+    }
+    if (canRead) {
       return value;
     }
     return readFail(obj, key, value);
@@ -114,20 +121,20 @@ const wrapGetterWithCache = ({cache = globalDefaultCache}) => {
 };
 
 
-const createValueMapper = (fn, key) => (obj, value) => fn(obj, key, value);
+const mapPromise = (obj, key, val, map) => {
+  if (isPromise(val)) {
+    return val.then((x) => map(obj, key, x));
+  }
+  return map(obj, key, val);
+};
 
-const createValueReducer = (fns, key) => (obj, value) => fns.reduce(
-  (lastValue, fn) => fn(obj, key, lastValue),
+
+const createValueMapper = (fn) => (obj, key, value) => mapPromise(obj, key, value, fn);
+
+const createValueReducer = (fns) => (obj, key, value) => fns.reduce(
+  (lastValue, fn) => mapPromise(obj, key, lastValue, fn),
   value
 );
-
-
-const mapPromise = (obj, val, map) => {
-  if (isPromise(val)) {
-    return val.then((x) => map(obj, x));
-  }
-  return map(obj, val);
-};
 
 
 const createSimpleGetter = (key) => function() {
@@ -142,13 +149,13 @@ const createSimpleMethod = (key) => function() {
 
 const createPromiseWrapper = (key, reducer) => function() {
   const val = this._data[key];
-  return mapPromise(this, val, reducer);
+  return mapPromise(this, key, val, reducer);
 };
 
 const createPromiseWrapperForMethod = (key, reducer) => function() {
   const data = this._data;
   const val = data[key].apply(data, arguments);
-  return mapPromise(this, val, reducer);
+  return mapPromise(this, key, val, reducer);
 };
 
 
@@ -206,8 +213,8 @@ const createGetter = (key, rule) => {
   }
 
   const reducer = fns.length > 1 ?
-    createValueReducer(fns, key) :
-    createValueMapper(fns[0], key);
+    createValueReducer(fns) :
+    createValueMapper(fns[0]);
 
   getter = createPromiseWrapper(key, reducer);
   getter = wrapGetterWithPreReadAccess(key, getter, rule);
@@ -228,8 +235,8 @@ const createMethod = (key, rule) => {
   }
 
   const reducer = fns.length > 1 ?
-    createValueReducer(fns, key) :
-    createValueMapper(fns[0], key);
+    createValueReducer(fns) :
+    createValueMapper(fns[0]);
 
   method = createPromiseWrapperForMethod(key, reducer);
   method = wrapMethodWithPreReadAccess(key, method, rule);

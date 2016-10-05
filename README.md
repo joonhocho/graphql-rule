@@ -11,6 +11,8 @@ Inspired by [RoModel](https://github.com/joonhocho/romodel) and Firebase rules.
 
 It actually has no dependencies to GraphQL. You can use it with plain js objects!
 
+Supports Node.js >= 4.0.
+
 
 
 ### Install
@@ -20,12 +22,120 @@ npm install --save graphql-rule
 
 
 ### How It Works
+`graphql-rule` is simply an authorization layer between your data and data accessor (`resolve` functions in GraphQL).
+
+
+    Without `graphql-rule`:
+    +-------------+           +------------+
+    |             |           |            |
+    |             |           |            |
+    |  Accessor   |   +--->   |    Data    |
+    |  (GraphQL)  |           |            |
+    |             |           |            |
+    |             |           |            |
+    +-------------+           +------------+
+
+
+    With `graphql-rule`:
+    +-------------+           +------------+           +------------+
+    |             |           |            |           |            |
+    |             |           |            |           |            |
+    |  Accessor   |   +--->   |   Rules    |   +--->   |    Data    |
+    |  (GraphQL)  |           |            |           |            |
+    |             |           |            |           |            |
+    |             |           |            |           |            |
+    +-------------+           +------------+           +------------+
+
+
 You define access `rules` for each property of your data (object), and it will
 allow or disallow read to the property based on the predefined rules.
 (only read rules are supported for now).
 
 It is designed for access control in GraphQL, but it is not opinionated nor requires any dependencies.
 Thus, it can be used for all projects with or without GraphQL.
+
+
+
+### API - Rule.create(options)
+```javascript
+import Rule from 'graphql-rule';
+
+Rule.create({
+  // [REQUIRED] Unique rule model name.
+  // Used for child field type specification.
+  name: string = null,
+  
+  // Base class for newly created and returned rule model class.
+  // Base class must extend {Model} from 'graphql-rule'.
+  base: ?class = class<Model>,
+  
+  // Define dynamic property getters.
+  // Can be accessed via `model.$props.propName`
+  // Each property is lazily initialized upon the first access and cached for performance.
+  // Useful for something expensive to calculate and is accessed over and over by multiple fields.
+  props: {
+    [propName: string]: (model: Model) => any,
+  } = {},
+  
+  // Define default rule for fields in this model.
+  defaultRule: {
+    // `preRead` is checked before accessing or calling a field.
+    // Useful for failing fast before accessing field that can be expensive to calculate such as field that initiates network calls
+    // If `false` or `preRead(model, key)` returns falsy value, the access to field will fail immediately.
+    // [default=true]
+    preRead: boolean | (model: Model, key: string) => boolean,
+    
+    // `read` is checked after accessing or calling a field.
+    // Useful for passing/failing based on the field value.
+    // If `false` or `read(model, key, value)` returns falsy value, the access to field will fail immediately.
+    // [default=true]
+    read: boolean | (model: Model, key: string, value: any) => boolean | Promise<boolean>,
+    
+    // `readFail` is used when either `preRead` or `read` returns falsy value.
+    // If it is not a function, it is used as a final value for the failed field.
+    // If it is function, the returend value is used as a final value for the failed field.
+    // It can throw an error, if throwing an error is a desired upon unauthorized access to a field.
+    // [default=null]
+    readFail: any | (model: Model, key: string, value: ?any) => any,
+  } = {preRead: true, read: true, readFail: null},
+  
+  // Define access rule for fields in this model.
+  rules: {
+    [fieldName: string]: {
+      // See `defaultRule.preRead`
+      preRead,
+      
+      // See `defaultRule.read`
+      read,
+      
+      // See `defaultRule.readFail`
+      readFail,
+      
+      // If specified, field value will be wrapped as an instance of the specified Model class.
+      type: string | class<Model> = null,
+      
+      // Whether the field returns a list of Model instances.
+      // Used together with `type` above.
+      list: boolean = false,
+      
+      // Filter function for list.
+      // Used together with `list` above.
+      readListItem: (listItem: FieldModel, model: Model, key: string, list: [FieldModel]) => boolean
+      
+      // Whether the field is a function method.
+      method: boolean = false,
+      
+      // Whether to cached the final value for the field.
+      // Only applied if `method: false` above.
+      cache: boolean = true,
+    },
+  },
+  
+  // Interfaces to inherit static and prototype properties and methods from.
+  // Useful if you have common props / field rules / etc.
+  interfaces: [class<Model>] = [],
+})
+```
 
 
 ### Basic Usage without GraphQL
@@ -89,7 +199,7 @@ Rule.config({
   readFail: () => { throw new Error('Access denied'); },
 });
 
-const User = Rule.create({
+const UserRule = Rule.create({
   name: 'User',
 
   // props are lazily initialized and cached once initialized.
@@ -103,6 +213,7 @@ const User = Rule.create({
   },
 
   rules: {
+    // Everyone can read `id`.
     id: true,
 
     email: {
@@ -113,6 +224,7 @@ const User = Rule.create({
       readFail: null,
     },
 
+    // No one can read `password`.
     password: false,
 
     profile: {
@@ -127,14 +239,14 @@ const User = Rule.create({
   },
 });
 
-const Profile = Rule.create({
+const ProfileRule = Rule.create({
   name: 'Profile',
 
   rules: {
     name: true,
 
     phone: {
-      // Access `User` model via `$parent`.
+      // Access `UserRule` instance via `$parent`.
       read: (model) => model.$parent.$props.isAdmin || model.$parent.$props.isOwner,
 
       readFail: () => { throw new Error('Not authorized!'); },
@@ -159,7 +271,7 @@ const userData = {
 };
 
 // pass `session` as a second param to make it available as `$context`.
-const user = new User(userData, session);
+const user = new UserRule(userData, session);
 
 user.id // 'user_id'
 
@@ -167,7 +279,7 @@ user.email // `null` since not admin nor owner.
 
 user.password // throws Error('Access denied').
 
-user.profile // `Profile` instance. accessible since authenticated.
+user.profile // `ProfileRule` instance. accessible since authenticated.
 
 user.profile.name // 'John Doe'
 
@@ -177,9 +289,9 @@ user.profile.phone // throws Error('Not authorized!') since not admin nor owner.
 
 ### Integration with GraphQL
 ```javascript
-// Use `User` and `Profile` from the above example.
+// Use `UserRule` and `ProfileRule` from the above example.
 
-var profileType = new GraphQLObjectType({
+const ProfileType = new GraphQLObjectType({
   name: 'Profile',
   fields: {
     name: { type: GraphQLString },
@@ -187,31 +299,31 @@ var profileType = new GraphQLObjectType({
   }
 });
 
-var userType = new GraphQLObjectType({
+const UserType = new GraphQLObjectType({
   name: 'User',
   fields: {
-    id: { type: GraphQLString },
+    id: { type: GraphQLID },
     email: { type: GraphQLString },
     password: { type: GraphQLString },
-    profile: { type: profileType },
+    profile: { type: ProfileType },
   }
 });
 
-var schema = new graphql.GraphQLSchema({
-  query: new graphql.GraphQLObjectType({
+const schema = new GraphQLSchema({
+  query: new GraphQLObjectType({
     name: 'Query',
     fields: {
       user: {
-        type: userType,
+        type: UserType,
         args: {
-          id: { type: graphql.GraphQLString }
+          id: { type: GraphQLID }
         },
-        resolve: function (_, args, session) {
+        resolve: (_, args, session) => {
           // `context` is passed as the third parameter of `resolve` function.
-          // pass the `context` as the second parameter of `User`.
+          // pass the `context` as the second parameter of `UserRule`.
           // Now your data is secured by predefined rules!
-          return new User(userDatabase[args.id], session);
-        }
+          return new UserRule(userDatabase[args.id], session);
+        },
       }
     }
   })
@@ -221,6 +333,107 @@ app.use('/graphql', graphqlHTTP((request) => ({
   schema: schema,
   // pass session data as `context`.
   // becomes available as third parameter in field `resolve` functions.
+  context: request.session,
+})));
+```
+
+
+### Integration with Mongoose & GraphQL
+```javascript
+// Define Mongoose schemas.
+const UserModel = mongoose.model('User', new mongoose.Schema({
+  email: String,
+  password: String,
+  profile: {
+    type: ObjectId,
+    ref: 'Profile',
+  },
+}));
+
+const ProfileModel = mongoose.model('Profile', new mongoose.Schema({
+  name: String,
+  phone: String,
+}));
+
+
+// Define access rules.
+const UserRule = Rule.create({
+  name: 'User',
+  props: {
+    isAdmin: (model) => model.$context.admin,
+    isOwner: (model) => model.$data.id === model.$context.userId,
+  },
+  rules: {
+    id: true,
+    email: {
+      preRead: (model) => model.$props.isAdmin || model.$props.isOwner,
+      readFail: () => { throw new Error('Unauthorized'); },
+    },
+    password: false,
+    profile: {
+      type: 'Profile',
+      preRead: true,
+    },
+  },
+});
+
+const ProfileRule = Rule.create({
+  name: 'Profile',
+  rules: {
+    name: true,
+    phone: {
+      preRead: (model) => model.$parent.$props.isAdmin || model.$parent.$props.isOwner,
+      readFail: () => null,
+    },
+  },
+});
+
+
+// Define GraphQL Types.
+const ProfileType = new GraphQLObjectType({
+  name: 'Profile',
+  fields: {
+    name: { type: GraphQLString },
+    phone: { type: GraphQLString },
+  }
+});
+
+const UserType = new GraphQLObjectType({
+  name: 'User',
+  fields: {
+    id: { type: GraphQLID },
+    email: { type: GraphQLString },
+    password: { type: GraphQLString },
+    profile: { type: ProfileType },
+  }
+});
+
+
+// Define GraphQL Queries.
+const schema = new GraphQLSchema({
+  query: new GraphQLObjectType({
+    name: 'Query',
+    fields: {
+      user: {
+        type: UserType,
+        args: {
+          id: { type: GraphQLID }
+        },
+        resolve: async (_, {id}, sessionContext) => {
+          const userId = new ObjectId(id);
+          const user = await UserModel.findById(userId).populate('profile').exec();
+          const securedUser = new UserRule(user, sessionContext);
+          return securedUser;
+        },
+      }
+    }
+  })
+});
+
+
+// Express GraphQL middleware.
+app.use('/graphql', graphqlHTTP((request) => ({
+  schema: schema,
   context: request.session,
 })));
 ```
@@ -341,6 +554,7 @@ model.nullField === null;
 // rule is undefined
 model.undefinedField === undefined;
 ```
+
 
 
 ### Even More Advanced Usage
