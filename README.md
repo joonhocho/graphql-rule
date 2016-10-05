@@ -322,7 +322,7 @@ const schema = new GraphQLSchema({
           // `context` is passed as the third parameter of `resolve` function.
           // pass the `context` as the second parameter of `UserRule`.
           // Now your data is secured by predefined rules!
-          return new UserRule(userDatabase[args.id], session);
+          return database.getUser(args.id).then((user) => new UserRule(user, session));
         },
       }
     }
