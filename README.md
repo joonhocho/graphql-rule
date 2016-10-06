@@ -83,7 +83,7 @@ Rule.create({
     // Useful for failing fast before accessing field that can be expensive to calculate such as field that initiates network calls
     // If `false` or `preRead(model, key)` returns falsy value, the access to field will fail immediately.
     // [default=true]
-    preRead: boolean | (model: Model, key: string) => boolean,
+    preRead: boolean | (model: Model, key: string) => boolean | Promise<boolean>,
     
     // `read` is checked after accessing or calling a field.
     // Useful for passing/failing based on the field value.
