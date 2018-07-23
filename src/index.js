@@ -1,5 +1,6 @@
 import {
   forEach,
+  fastMap,
   setProperty,
   defineClassName,
   defineStatic,
@@ -70,13 +71,24 @@ const wrapGetterWithModel = ({type, list, readListItem}) => {
 
   if (list) {
     if (readListItem) {
-      return (obj, key, value) =>
-        value && value.map(mapFn, obj).filter(
-          (item) => readListItem(item, obj, key, value)
-        );
+      return (obj, key, value) => {
+        if (value) {
+          const len = value.length;
+          const res = [];
+          for (let i = 0; i < len; i += 1) {
+            const item = value[i];
+            const v = mapFn.call(obj, item, i, value);
+            if (readListItem(v, obj, key, value)) {
+              res.push(v);
+            }
+          }
+          return res;
+        }
+        return value;
+      };
     }
 
-    return (obj, key, value) => value && value.map(mapFn, obj);
+    return (obj, key, value) => value && fastMap(value, mapFn, obj);
   }
 
   // Non-list type field.
@@ -127,10 +139,14 @@ const mapPromise = (obj, key, val, map) => {
 
 const createValueMapper = (fn) => (obj, key, value) => mapPromise(obj, key, value, fn);
 
-const createValueReducer = (fns) => (obj, key, value) => fns.reduce(
-  (lastValue, fn) => mapPromise(obj, key, lastValue, fn),
-  value
-);
+const createValueReducer = (fns) => (obj, key, value) => {
+  let newValue = value;
+  const len = fns.length;
+  for (let i = 0; i < len; i += 1) {
+    newValue = mapPromise(obj, key, newValue, fns[i]);
+  }
+  return newValue;
+};
 
 
 const createSimpleGetter = (key) => function() {
@@ -449,7 +465,7 @@ export class Model {
 
   $createChildren(model, list) {
     const Class = getModel(model);
-    return list && list.map((data) => createChildModel(this, Class, data));
+    return list && fastMap(list, (data) => createChildModel(this, Class, data));
   }
 
   $implements(Type) {

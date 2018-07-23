@@ -1,5 +1,19 @@
 export function forEach(obj, fn) {
-  Object.keys(obj).forEach((key) => fn(obj[key], key, obj));
+  const keys = Object.keys(obj);
+  const len = keys.length;
+  for (let i = 0; i < len; i += 1) {
+    const key = keys[i];
+    fn(obj[key], key, obj);
+  }
+}
+
+export function fastMap(arr, fn, ctx) {
+  const len = arr.length;
+  const res = new Array(len);
+  for (let i = 0; i < len; i += 1) {
+    res[i] = fn.call(ctx, arr[i], i, arr);
+  }
+  return res;
 }
 
 export function setProperty(obj, key, value) {
