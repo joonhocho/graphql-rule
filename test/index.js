@@ -2,7 +2,7 @@ if (typeof Promise === 'undefined') {
   require('es6-promise').polyfill();
 }
 import {expect} from 'chai';
-import {config, create, clear, Model} from '../src';
+import {config, create, clear, Model, compile} from '../src';
 
 describe('graphql-rule', () => {
   beforeEach(() => {
@@ -914,5 +914,35 @@ describe('graphql-rule', () => {
         },
       })
     ).to.throw('function');
+  });
+
+  it('Parent / Child with delayed compile for circular references', () => {
+    const Parent = create({
+      name: 'P1',
+      rules: () => ({
+        child: Child,
+      }),
+    });
+
+    const Child = create({
+      name: 'C1',
+      rules: () => ({
+        parent: Parent,
+      }),
+    });
+
+    const p = new Parent({child: {
+      parent: {child: {}},
+    }});
+
+    expect(p).to.be.an.instanceof(Parent);
+    expect(p.child).to.not.be.an.instanceof(Child);
+
+    compile();
+
+    expect(p.child).to.be.an.instanceof(Child);
+    expect(p.child.parent).to.be.an.instanceof(Parent);
+    expect(p.child.parent.child).to.be.an.instanceof(Child);
+    expect(p.child.parent.child.parent).to.be.undefined;
   });
 });

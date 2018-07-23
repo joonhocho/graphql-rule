@@ -139,7 +139,7 @@ const createSimpleGetter = (key) => function() {
 
 const createSimpleMethod = (key) => function() {
   const data = this._data;
-  return data[key].apply(data, arguments);
+  return data[key](...arguments);
 };
 
 
@@ -150,7 +150,7 @@ const createPromiseWrapper = (key, reducer) => function() {
 
 const createPromiseWrapperForMethod = (key, reducer) => function() {
   const data = this._data;
-  const val = data[key].apply(data, arguments);
+  const val = data[key](...arguments);
   return mapPromise(this, key, val, reducer);
 };
 
@@ -264,6 +264,16 @@ export const config = (defaults) => {
   if ('cache' in defaults) globalDefaultCache = Boolean(defaults.cache);
 };
 
+const compileQueue = [];
+
+export const compile = () => {
+  const len = compileQueue.length;
+  for (let i = 0; i < len; i += 1) {
+    compileQueue[i]();
+  }
+  compileQueue.length = 0;
+};
+
 
 export const create = ({
   name,
@@ -325,7 +335,7 @@ export const create = ({
 
 
   // rules
-  forEach(rules, (rule, key) => {
+  const compileRule = (rules) => forEach(rules, (rule, key) => {
     const ruleType = typeof rule;
     if (ruleType === 'string' || rule && rule.$signature === SIGNATURE) {
       rule = {
@@ -371,6 +381,12 @@ export const create = ({
       );
     }
   });
+
+  if (typeof rules === 'function') {
+    compileQueue.push(() => compileRule(rules()));
+  } else {
+    compileRule(rules);
+  }
 
   return NewModel;
 };
